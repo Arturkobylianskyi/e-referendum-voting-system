@@ -42,6 +42,10 @@ public class VotingBlockchain {
         this.adminPubExponentE = adminPubExponentE;
     }
 
+    public List<Block> getChain(){
+        return chain;
+    }
+
     // Phase 2 (Commit) : Voter anonymously submits sealed commitment + unblinded Admin signature
     public int submitBallot(BigInteger commitmentX, BigInteger cleanSignature){
         // 1. Reject duplicate ballots
@@ -131,48 +135,48 @@ public class VotingBlockchain {
         tally.forEach((candidate, count) -> System.out.println(candidate + ": " + count + " vote(s)"));
     }
 
-    public static void main(String[] args){
-        ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
-        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
-
-        // Voter 1 prepares ballot for "Kandydat Nowak"
-        String pesel1 = "99051512343";
-        String pesel2 = "01292012272";
-        String salt1 = VoteCommitment.generateSalt();
-        String salt2 = VoteCommitment.generateSalt();
-
-        BigInteger commit1 = VoteCommitment.createCommitment("Kandydat Nowak", salt1);
-        BigInteger commit2 = VoteCommitment.createCommitment("Kandydat Nowak", salt2);
-
-
-        // Phase 1: Get blind signature from Admin
-        BigInteger maskB = BlindSignatureMath.generateBlindFactor(admin.getModulusN());
-        BigInteger blinded1 = BlindSignatureMath.blind(commit1, maskB, admin.getPubExponentE(), admin.getModulusN());
-        BigInteger blindSig1 = admin.authorizeAndSign(pesel1, blinded1);
-        BigInteger cleanSig1 = BlindSignatureMath.unblind(blindSig1, maskB, admin.getModulusN());
-
-        BigInteger maskB2 = BlindSignatureMath.generateBlindFactor(admin.getModulusN());
-        BigInteger blinded2 = BlindSignatureMath.blind(commit2, maskB2, admin.getPubExponentE(), admin.getModulusN());
-        BigInteger blindSig2 = admin.authorizeAndSign(pesel2, blinded2);
-        BigInteger cleanSig2 = BlindSignatureMath.unblind(blindSig2, maskB2, admin.getModulusN());
-
-
-        //Phase 2: Submit sealed ballot to Blockchain
-        int blockIndex = blockchain.submitBallot(commit1, cleanSig1);
-        System.out.println("Phase 2 (Before 20:00): Ballot added at Block #" + blockIndex);
-        blockchain.printResult(); // vote is still sealed
-
-        int blockIndex2 = blockchain.submitBallot(commit2, cleanSig2);
-        System.out.println("Phase 2 (Before 20:00): Ballot added at Block #" + blockIndex2);
-        blockchain.printResult(); // vote is still sealed
-
-        // Phase 3: Reveal vote after 20:00
-        blockchain.revealVote(blockIndex, "Kandydat Nowak", salt1);
-        System.out.println("\n Phase 3 (After 20:00) : Ballot revealed!");
-        blockchain.printResult(); // Now the vote is counted!
-
-        blockchain.revealVote(blockIndex2, "Kandydat Nowak", salt2);
-        System.out.println("\n Phase 3 (After 20:00) : Ballot revealed!");
-        blockchain.printResult(); // Now the vote is counted!
-    }
+//    public static void main(String[] args){
+//        ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
+//        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
+//
+//        // Voter 1 prepares ballot for "Kandydat Nowak"
+//        String pesel1 = "99051512343";
+//        String pesel2 = "01292012272";
+//        String salt1 = VoteCommitment.generateSalt();
+//        String salt2 = VoteCommitment.generateSalt();
+//
+//        BigInteger commit1 = VoteCommitment.createCommitment("Kandydat Nowak", salt1);
+//        BigInteger commit2 = VoteCommitment.createCommitment("Kandydat Nowak", salt2);
+//
+//
+//        // Phase 1: Get blind signature from Admin
+//        BigInteger maskB = BlindSignatureMath.generateBlindFactor(admin.getModulusN());
+//        BigInteger blinded1 = BlindSignatureMath.blind(commit1, maskB, admin.getPubExponentE(), admin.getModulusN());
+//        BigInteger blindSig1 = admin.authorizeAndSign(pesel1, blinded1);
+//        BigInteger cleanSig1 = BlindSignatureMath.unblind(blindSig1, maskB, admin.getModulusN());
+//
+//        BigInteger maskB2 = BlindSignatureMath.generateBlindFactor(admin.getModulusN());
+//        BigInteger blinded2 = BlindSignatureMath.blind(commit2, maskB2, admin.getPubExponentE(), admin.getModulusN());
+//        BigInteger blindSig2 = admin.authorizeAndSign(pesel2, blinded2);
+//        BigInteger cleanSig2 = BlindSignatureMath.unblind(blindSig2, maskB2, admin.getModulusN());
+//
+//
+//        //Phase 2: Submit sealed ballot to Blockchain
+//        int blockIndex = blockchain.submitBallot(commit1, cleanSig1);
+//        System.out.println("Phase 2 (Before 20:00): Ballot added at Block #" + blockIndex);
+//        blockchain.printResult(); // vote is still sealed
+//
+//        int blockIndex2 = blockchain.submitBallot(commit2, cleanSig2);
+//        System.out.println("Phase 2 (Before 20:00): Ballot added at Block #" + blockIndex2);
+//        blockchain.printResult(); // vote is still sealed
+//
+//        // Phase 3: Reveal vote after 20:00
+//        blockchain.revealVote(blockIndex, "Kandydat Nowak", salt1);
+//        System.out.println("\n Phase 3 (After 20:00) : Ballot revealed!");
+//        blockchain.printResult(); // Now the vote is counted!
+//
+//        blockchain.revealVote(blockIndex2, "Kandydat Nowak", salt2);
+//        System.out.println("\n Phase 3 (After 20:00) : Ballot revealed!");
+//        blockchain.printResult(); // Now the vote is counted!
+//    }
 }
