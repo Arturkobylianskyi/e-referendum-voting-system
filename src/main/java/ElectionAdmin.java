@@ -63,41 +63,40 @@ public class ElectionAdmin {
         return BlindSignatureMath.blindSign(blindedMsg, privExponentD, modulusN);
     }
 
-    public static void main(String[] args){
-        ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
-
-        String validAdultPesel = "99051512343";
-        String minorPesel = "15251012349";
-        String errPesel = "12345678909";
-
-        // Simulate a voter preparing a blinded message using Utilities
-        String salt = VoteCommitment.generateSalt();
-        BigInteger commitmentX = VoteCommitment.createCommitment("Kandydat Nowak", salt);
-        BigInteger b = BlindSignatureMath.generateBlindFactor(admin.getModulusN());
-        BigInteger blindedMsg = BlindSignatureMath.blind(commitmentX, b, admin.getPubExponentE(), admin.getModulusN());
-
-        // test 1: Valid adult voter requests signature -> success
-        BigInteger blindSig = admin.authorizeAndSign(validAdultPesel, blindedMsg);
-        BigInteger cleanSig = BlindSignatureMath.ublind(blindSig, b, admin.getModulusN());
-        boolean isVerified = BlindSignatureMath.verifySignature(commitmentX, cleanSig, admin.getPubExponentE(), admin.getModulusN());
-        System.out.println("Test 1 (Valid adult): Signature verified = " + isVerified);
-
-        // test 2: Same voter tries to get a second signature -> Blocked
-        try {
-            admin.authorizeAndSign(validAdultPesel, blindedMsg);
-        } catch (SecurityException ex){
-            System.out.println("Test 2 (Double voting): " + ex.getMessage());
-        }
-
-        // test 3 Underage voter tries to get a signature -> Blocked
-        try {
-            admin.authorizeAndSign(minorPesel, blindedMsg);
-        }catch (SecurityException ex){
-            System.out.println("Test 3 (Underage voter): " + ex.getMessage());
-        }
-
-
-
-    }
+//    public static void main(String[] args){
+//
+//        ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
+//
+//        String validAdultPesel = "99051512343";
+//        String minorPesel = "15251012349";
+//        String errPesel = "12345678909";
+//
+//        // Simulate a voter preparing a blinded message using Utilities
+//        String salt = VoteCommitment.generateSalt();
+//        BigInteger commitmentX = VoteCommitment.createCommitment("Kandydat Nowak", salt);
+//        BigInteger b = BlindSignatureMath.generateBlindFactor(admin.getModulusN());
+//        BigInteger blindedMsg = BlindSignatureMath.blind(commitmentX, b, admin.getPubExponentE(), admin.getModulusN());
+//
+//        // test 1: Valid adult voter requests signature -> success
+//        BigInteger blindSig = admin.authorizeAndSign(validAdultPesel, blindedMsg);
+//        BigInteger cleanSig = BlindSignatureMath.ublind(blindSig, b, admin.getModulusN());
+//        boolean isVerified = BlindSignatureMath.verifySignature(commitmentX, cleanSig, admin.getPubExponentE(), admin.getModulusN());
+//        System.out.println("Test 1 (Valid adult): Signature verified = " + isVerified);
+//
+//        // test 2: Same voter tries to get a second signature -> Blocked
+//        try {
+//            admin.authorizeAndSign(validAdultPesel, blindedMsg);
+//        } catch (SecurityException ex){
+//            System.out.println("Test 2 (Double voting): " + ex.getMessage());
+//        }
+//
+//        // test 3 Underage voter tries to get a signature -> Blocked
+//        try {
+//            admin.authorizeAndSign(minorPesel, blindedMsg);
+//        }catch (SecurityException ex){
+//            System.out.println("Test 3 (Underage voter): " + ex.getMessage());
+//        }
+//
+//    }
 
 }
