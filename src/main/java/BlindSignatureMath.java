@@ -36,7 +36,7 @@ public class BlindSignatureMath {
 
     // Voter: Removes the blinding factor 'b' to obtain a valid RSA signature on 'commitmentX'
     // Formula: cleanSignature = (blindSig * b^-1) mod N
-    public static BigInteger ublind(BigInteger blindSig, BigInteger blindingFactorB, BigInteger modulsN){
+    public static BigInteger unblind(BigInteger blindSig, BigInteger blindingFactorB, BigInteger modulsN){
         BigInteger bInverse = blindingFactorB.modInverse(modulsN);
         return blindSig.multiply(bInverse).mod(modulsN);
     }
@@ -72,13 +72,13 @@ public class BlindSignatureMath {
 //        // 3. Admin signs the blinded message
 //        BigInteger blindSig = blindSign(blindedMsg, d, N);
 //
-//        // 4. Voter ublinds the signature
-//        BigInteger cleanSignature = ublind(blindSig, b, N);
-//        System.out.println("3. Ublinded RSA signature:     " + cleanSignature.toString(16).substring(0, 24) + "....");
+//        // 4. Voter unblinds the signature
+//        BigInteger cleanSignature = unblind(blindSig, b, N);
+//        System.out.println("3. Unblinded RSA signature:     " + cleanSignature.toString(16).substring(0, 24) + "....");
 //
 //        // 5. Blockchain verifies signature against original commitment
 //        boolean isValid = verifySignature(originalCommitmentX, cleanSignature, e, N);
-//        System.out.println("\nSignature verification on-chain (expectd true): " + isValid);
+//        System.out.println("\nSignature verification on-chain (expected true): " + isValid);
 //
 //        // 6. Tamper test: trying to use the valid signature with a different candidate commitment
 //        BigInteger fakeCommitmentX = VoteCommitment.createCommitment("Kandydat Kowalski", salt);
