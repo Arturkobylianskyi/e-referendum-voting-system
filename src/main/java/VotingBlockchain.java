@@ -1,5 +1,8 @@
 import java.math.BigInteger;
-import java.time.LocalDate;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
 import java.util.*;
 
 public class VotingBlockchain {
@@ -10,6 +13,7 @@ public class VotingBlockchain {
         public final int index;
         public final BigInteger commitmentX;
         public final BigInteger cleanSignature;
+        public final BigInteger encryptedOpening;
         public final String previousHash;
         public final String currentHash;
 
@@ -17,37 +21,67 @@ public class VotingBlockchain {
         public String revealedCandidate = null;
         public String revealedSalt = null;
 
-        public Block(int index, BigInteger commitmentX, BigInteger cleanSignature, String previousHash){
+        public Block(int index, BigInteger commitmentX, BigInteger cleanSignature, BigInteger encryptedOpening, String previousHash){
             this.index = index;
             this.commitmentX =commitmentX;
             this.cleanSignature = cleanSignature;
+            this.encryptedOpening = encryptedOpening;
             this.previousHash = previousHash;
             this.currentHash = calculateHash();
         }
 
         // Computes SHA-256 hash of the block's immutable fields
-        public String calculateHash(){
-            String blockData = index + ":" +  commitmentX.toString(16) + ":" + cleanSignature.toString(16);
+        public String calculateHash() {
+            String blockData = index + ":" + commitmentX.toString(16) + ":" + cleanSignature.toString(16) + ":" + encryptedOpening.toString(16);
             return VoteCommitment.createCommitment(blockData, previousHash).toString(16);
         }
     }
 
     private final BigInteger adminModulsN;
     private final BigInteger adminPubExponentE;
+
+    // Blockchain's own key pair for time-locked automatic opening after referendum
+    private final BigInteger tallyModulusN;
+    private final BigInteger tallyPubExponentE;
+    private final BigInteger tallyPrivExponentD;
+
     private final List<Block> chain = new ArrayList<>();
     private final Set<BigInteger> usedCommitments = new HashSet<>();
 
-    public VotingBlockchain(BigInteger adminModulsN, BigInteger adminPubExponentE){
+    public VotingBlockchain(BigInteger adminModulsN, BigInteger adminPubExponentE) throws RuntimeException{
         this.adminModulsN = adminModulsN;
         this.adminPubExponentE = adminPubExponentE;
+
+        try{
+            KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+            keyGen.initialize(2048);
+            KeyPair pair = keyGen.generateKeyPair();
+
+            RSAPublicKey pub = (RSAPublicKey) pair.getPublic();
+            RSAPrivateKey priv = (RSAPrivateKey) pair.getPrivate();
+
+            this.tallyModulusN = pub.getModulus();
+            this.tallyPubExponentE = pub.getPublicExponent();
+            this.tallyPrivExponentD = priv.getPrivateExponent();
+        } catch (Exception e){
+            throw new RuntimeException("Failed to initialize Tally RSA keys", e);
+        }
+    }
+
+    public BigInteger getTallyModulusN(){
+        return tallyModulusN;
+    }
+
+    public BigInteger getTallyPubExponentE(){
+        return tallyPubExponentE;
     }
 
     public List<Block> getChain(){
         return chain;
     }
 
-    // Phase 2 (Commit) : Voter anonymously submits sealed commitment + unblinded Admin signature
-    public int submitBallot(BigInteger commitmentX, BigInteger cleanSignature){
+    // Phase 2 Voter anonymously submits sealed commitment + unblinded Admin signature
+    public int submitBallot(BigInteger commitmentX, BigInteger cleanSignature, BigInteger encryptedOpening) throws SecurityException{
         // 1. Reject duplicate ballots
         if(usedCommitments.contains(commitmentX)){
             throw new SecurityException("Rejected: This ballot commitment is already on the blockchain");
@@ -63,7 +97,7 @@ public class VotingBlockchain {
         int newIndex = chain.size();
         String prevHash = (newIndex == 0) ? "0000000000000000" : chain.get(newIndex - 1).currentHash;
 
-        Block newBlock = new Block(newIndex, commitmentX, cleanSignature, prevHash);
+        Block newBlock = new Block(newIndex, commitmentX, cleanSignature, encryptedOpening, prevHash);
         chain.add(newBlock);
         usedCommitments.add(commitmentX);
 
@@ -71,24 +105,34 @@ public class VotingBlockchain {
     }
 
     // Phase 3(Reveal) : Voter anonymously sends (blockIndex, candidate, salt) to open their ballot
-    public void revealVote(int blockIndex, String candidate, String salt){
-        if(blockIndex < 0 || blockIndex >= chain.size()){
-            throw new IllegalArgumentException("Invalid block index: " + blockIndex);
-        }
+    public void closePollsAndRevealAll(){
+        for(Block block : chain){
+            if(block.revealedCandidate != null){
+                continue;
+            }
 
-        Block block = chain.get(blockIndex);
-        if(block.revealedCandidate != null){
-            throw new SecurityException("Rejected: Block #" + blockIndex + " is already revealed!");
-        }
+            // 1. Decrypt "candidate:salt" using Tally Private Key
+            String decryptedPayload = VoteCommitment.decryptOpening(
+                    block.encryptedOpening, tallyPrivExponentD, tallyModulusN
+            );
+            String[] parts = decryptedPayload.split(":", 2);
+            if(parts.length !=2 ){
+                throw new SecurityException("Corrupted payload format in Block #" + block.index);
+            }
 
-        // Verify that SHA - 256(candidate + ":" + salt) matches the morning commitmentX using Utility #2;
-        boolean isCommitmentMatching = VoteCommitment.verifyCommitment(block.commitmentX, candidate, salt);
-        if(!isCommitmentMatching){
-            throw new SecurityException("Rejected: Revealed vote or slat does not match commitment in Block #" + blockIndex);
-        }
+            String candidate = parts[0];
+            String salt = parts[1];
 
-        block.revealedCandidate = candidate;
-        block.revealedSalt = salt;
+            // 2. Verify that decrypted candidate + salt matches the morning commitmentX
+            boolean isMatching = VoteCommitment.verifyCommitment(block.commitmentX, candidate, salt);
+            if(!isMatching){
+                throw new SecurityException("Integrity failure: Decrypted vote does not match commitmentX in Block #" + block.index);
+            }
+
+            block.revealedCandidate = candidate;
+            block.revealedSalt = salt;
+
+        }
     }
 
     // Audit: Verifies that no block in the chain has been tampered with
@@ -115,7 +159,7 @@ public class VotingBlockchain {
 
     // Phase 4 (Tally): Counts revealed votes and prints the public ledger
     public void printResult(){
-        System.out.println("\n== Blockchain ledger audit (Chain Valid: " + isChainValid() + ") ==");
+        System.out.println("\nBlockchain ledger audit (Chain Valid: " + isChainValid() + ")");
 
         Map<String, Integer> tally = new HashMap<>();
 
@@ -131,52 +175,12 @@ public class VotingBlockchain {
             }
         }
 
-        System.out.println("\n=== Final election tally ===");
-        tally.forEach((candidate, count) -> System.out.println(candidate + ": " + count + " vote(s)"));
+        System.out.println("\nFinal election tally");
+        if(tally.isEmpty()){
+            System.out.println("No votes revealed yet (Polls are still open).");
+        }else{
+            tally.forEach((candidate, count) -> System.out.println(candidate + ": " + count + " vote(s)"));
+        }
     }
 
-//    public static void main(String[] args){
-//        ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
-//        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
-//
-//        // Voter 1 prepares ballot for "Kandydat Nowak"
-//        String pesel1 = "99051512343";
-//        String pesel2 = "01292012272";
-//        String salt1 = VoteCommitment.generateSalt();
-//        String salt2 = VoteCommitment.generateSalt();
-//
-//        BigInteger commit1 = VoteCommitment.createCommitment("Kandydat Nowak", salt1);
-//        BigInteger commit2 = VoteCommitment.createCommitment("Kandydat Nowak", salt2);
-//
-//
-//        // Phase 1: Get blind signature from Admin
-//        BigInteger maskB = BlindSignatureMath.generateBlindFactor(admin.getModulusN());
-//        BigInteger blinded1 = BlindSignatureMath.blind(commit1, maskB, admin.getPubExponentE(), admin.getModulusN());
-//        BigInteger blindSig1 = admin.authorizeAndSign(pesel1, blinded1);
-//        BigInteger cleanSig1 = BlindSignatureMath.unblind(blindSig1, maskB, admin.getModulusN());
-//
-//        BigInteger maskB2 = BlindSignatureMath.generateBlindFactor(admin.getModulusN());
-//        BigInteger blinded2 = BlindSignatureMath.blind(commit2, maskB2, admin.getPubExponentE(), admin.getModulusN());
-//        BigInteger blindSig2 = admin.authorizeAndSign(pesel2, blinded2);
-//        BigInteger cleanSig2 = BlindSignatureMath.unblind(blindSig2, maskB2, admin.getModulusN());
-//
-//
-//        //Phase 2: Submit sealed ballot to Blockchain
-//        int blockIndex = blockchain.submitBallot(commit1, cleanSig1);
-//        System.out.println("Phase 2 (Before 20:00): Ballot added at Block #" + blockIndex);
-//        blockchain.printResult(); // vote is still sealed
-//
-//        int blockIndex2 = blockchain.submitBallot(commit2, cleanSig2);
-//        System.out.println("Phase 2 (Before 20:00): Ballot added at Block #" + blockIndex2);
-//        blockchain.printResult(); // vote is still sealed
-//
-//        // Phase 3: Reveal vote after 20:00
-//        blockchain.revealVote(blockIndex, "Kandydat Nowak", salt1);
-//        System.out.println("\n Phase 3 (After 20:00) : Ballot revealed!");
-//        blockchain.printResult(); // Now the vote is counted!
-//
-//        blockchain.revealVote(blockIndex2, "Kandydat Nowak", salt2);
-//        System.out.println("\n Phase 3 (After 20:00) : Ballot revealed!");
-//        blockchain.printResult(); // Now the vote is counted!
-//    }
 }

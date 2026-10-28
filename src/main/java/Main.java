@@ -76,7 +76,11 @@ public class Main {
 
         for(VoterClient v: voters){
             // Voter send only (commitmentX, cleanSignature) - no pesel
-            v.blockIndex = blockchain.submitBallot(v.commitmentX, v.cleanSignature);
+            BigInteger encryptedOpening = VoteCommitment.encryptOpening(
+                    v.candidate, v.salt, blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
+            );
+
+            v.blockIndex = blockchain.submitBallot(v.commitmentX, v.cleanSignature, encryptedOpening );
             System.out.println("[OK] Anonymous sealed ballot stored in Block #" + v.blockIndex);
         }
 
@@ -85,10 +89,8 @@ public class Main {
         System.out.println("Phase 3: Anonymous reveal after referendum");
         Collections.shuffle(voters);
 
-        for(VoterClient v : voters){
-            blockchain.revealVote(v.blockIndex, v.candidate, v.salt);
-            System.out.println("[OK] Block #" + v.blockIndex + " unlock with salt.");
-        }
+        blockchain.closePollsAndRevealAll();
+        System.out.println("[OK] Polls closed ! Blockchain decrypted and verified all ballots.");
 
         System.out.println("Phase 4: Final election count");
         blockchain.printResult();

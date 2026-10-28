@@ -1,9 +1,6 @@
 import java.math.BigInteger;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.SecureRandom;
-import java.security.interfaces.RSAPrivateKey;
-import java.security.interfaces.RSAPublicKey;
+
 
 public class BlindSignatureMath {
 
@@ -46,58 +43,4 @@ public class BlindSignatureMath {
         return recoveredX.equals(commitmentX);
     }
 
-//    public static void main(String[] args) throws Exception{
-//        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
-//        keyGen.initialize(2048);
-//
-//        var keyPair = keyGen.generateKeyPair();
-//        var pubKey = (RSAPublicKey) keyPair.getPublic();
-//        var privKey = (RSAPrivateKey) keyPair.getPrivate();
-//
-//        BigInteger N = pubKey.getModulus();
-//        BigInteger e = pubKey.getPublicExponent();
-//        BigInteger d = privKey.getPrivateExponent();
-//
-//        // 1.  Voter creates salted commitment
-//        String salt = VoteCommitment.generateSalt();
-//        BigInteger originalCommitmentX = VoteCommitment.createCommitment("Kandydat Nowak", salt);
-//        System.out.println("1. Original commitment (x):    " + originalCommitmentX);
-//
-//        // 2. Voret blinds the commitment before sending to Admin
-//        BigInteger b = generateBlindFactor(N);
-//        BigInteger blindedMsg = blind(originalCommitmentX, b, e, N);
-//        System.out.println("2. Blinded msg (seen by Admin):    " + blindedMsg.toString(16).substring(0, 24) + "....");
-//
-//
-//        // 3. Admin signs the blinded message
-//        BigInteger blindSig = blindSign(blindedMsg, d, N);
-//
-//        // 4. Voter unblinds the signature
-//        BigInteger cleanSignature = unblind(blindSig, b, N);
-//        System.out.println("3. Unblinded RSA signature:     " + cleanSignature.toString(16).substring(0, 24) + "....");
-//
-//        // 5. Blockchain verifies signature against original commitment
-//        boolean isValid = verifySignature(originalCommitmentX, cleanSignature, e, N);
-//        System.out.println("\nSignature verification on-chain (expected true): " + isValid);
-//
-//        // 6. Tamper test: trying to use the valid signature with a different candidate commitment
-//        BigInteger fakeCommitmentX = VoteCommitment.createCommitment("Kandydat Kowalski", salt);
-//        boolean isFakeValid = verifySignature(fakeCommitmentX, cleanSignature, e, N);
-//        System.out.println("Signature verification for tapered vote (expected false):   " + isFakeValid);
-//
-//    }
-
-//    [1. originalCommitmentX]  (Солений хеш голосу: SHA-256("Nowak:salt"))
-//            │
-//            ▼  викликаємо: blind(originalCommitmentX, b, e, N)
-//    [2. blindedMsg]           (Хеш у масці 'b' — його бачить Адмін)
-//            │
-//            ▼  викликаємо: blindSign(blindedMsg, d, N)
-//    [3. blindSig]             (Підпис Адміна, але все ще поверх маски 'b')
-//            │
-//            ▼  викликаємо: unblind(blindSig, b, N)
-//    [4. cleanSignature]       (Маску 'b' зняли! Залишився чистий підпис під originalCommitmentX)
-//            │
-//            ▼  викликаємо: verifySignature(originalCommitmentX, cleanSignature, e, N)
-//    [5. true / false]         (Блокчейн звіряє #1 і #4 -> повертає true!)
 }
