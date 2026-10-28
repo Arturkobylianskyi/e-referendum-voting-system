@@ -1,8 +1,6 @@
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
+import java.security.*;
 import java.util.HexFormat;
 
 public class VoteCommitment {
@@ -18,7 +16,7 @@ public class VoteCommitment {
         return HexFormat.of().formatHex(randomBytes);
     }
 
-    public static BigInteger createCommitment(String vote, String salt){
+    public static BigInteger createCommitment(String vote, String salt) throws RuntimeException{
         if(vote == null || vote.isBlank() || salt == null || salt.isBlank()){
             throw new IllegalArgumentException("vote and salt can't be blank");
         }
@@ -28,7 +26,7 @@ public class VoteCommitment {
             byte[] hashByte = digest.digest(payload.getBytes(StandardCharsets.UTF_8));
 
             return new BigInteger(1, hashByte);
-        } catch (NoSuchAlgorithmException e){
+        } catch (Exception e){
             throw new RuntimeException("Algorytm SHA-256 is not available", e);
         }
     }
@@ -38,32 +36,17 @@ public class VoteCommitment {
         return originalCommitment.equals(recomputed);
     }
 
-//    public static void main(String[] args){
-//        String candidate = "Kandydat Nowak";
-//
-//        // два різні виборці голосують за того самого кандидата
-//        String saltVoter1 = generateSalt();
-//        String saltVoter2 = generateSalt();
-//
-//        BigInteger commit1 = createCommitment(candidate, saltVoter1);
-//        BigInteger commit2 = createCommitment(candidate, saltVoter2);
-//
-//        System.out.println("Candidate 1 salt r1 : " + saltVoter1);
-//        System.out.println("Candidate 1 commitment (x1, hex): " + commit1.toString(16));
-//        System.out.println("Candidate 2 commitment (x2, hex): " + commit2.toString(16));
-//        System.out.println("are the commitments the same for the same vote ?" + commit1.equals(commit2));
-//
-//        // test reveal honest
-//        boolean validOpen = verifyCommitment(commit1, "Kandydat Nowak", saltVoter1);
-//        System.out.println("\n checking of revealing (kandydat Nowa + r1): " + validOpen);
-//
-//        // test 2
-//        boolean cheatVote = verifyCommitment(commit1, "Kandydat Kowalski", saltVoter1);
-//        System.out.println("attempt of change the choice while reaveal (Kandydat Kowalski + r1)" + cheatVote);
-//
-//        // test 3 test to send other salt
-//        boolean cheatSalt = verifyCommitment(commit1, "Kandydat Nowak", saltVoter2);
-//        System.out.println("attempt of pass other salt (Kandydat Nowak + r2)"+ cheatSalt);
-//
-//    }
+    // Encrypts "candidate:salt" directly as a BigInteger: C = M^e mod N
+    public static BigInteger encryptOpening(String candidate, String salt, BigInteger tallyE, BigInteger tallyN) {
+        String payload = candidate + ":" + salt;
+        BigInteger messageM = new BigInteger(1, payload.getBytes(StandardCharsets.UTF_8));
+        return messageM.modPow(tallyE, tallyN);
+    }
+
+    // Decrypts the BigInteger back into "candidate:salt": M = C^d mod N
+    public static String decryptOpening(BigInteger encryptedOpening, BigInteger tallyD, BigInteger tallyN){
+        BigInteger messageM = encryptedOpening.modPow(tallyD, tallyN);
+        return new String(messageM.toByteArray(), StandardCharsets.UTF_8);
+    }
+
 }

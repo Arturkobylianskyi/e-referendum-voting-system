@@ -60,62 +60,90 @@ public class FooProtocolSecurityTest {
         String salt = VoteCommitment.generateSalt();
         BigInteger commitmentX = VoteCommitment.createCommitment("Kandydat Nowak", salt);
         BigInteger forgetSignature = BigInteger.valueOf(999999999);
+        BigInteger encryptedOpening = VoteCommitment.encryptOpening(
+                "Kandydat Nowak", salt, blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
+        );
 
         // Blockchain must reject the ballot because RSA signature varification fails
         assertThrows(SecurityException.class, () -> {
-            blockchain.submitBallot(commitmentX, forgetSignature);
+            blockchain.submitBallot(commitmentX, forgetSignature, encryptedOpening);
         });
     }
 
 
     @Test
-    void shouldBlockVoterFromSwitchingCandidateDuringRevealPhase(){
+    void shouldDetectMismatchedCommitmentAndEncryptedOpeningDuringAutoReveal() {
         ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
         VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
 
         String pesel = generateValidPesel("9511205432");
         String salt = VoteCommitment.generateSalt();
 
-        // Phase 1-2, Voter commits to "Kandydat Nowak"
-        BigInteger commitmentX = VoteCommitment.createCommitment("Kandydat Nowak", salt);
+        BigInteger commitmentX = VoteCommitment.createCommitment("Kandydat_Nowak", salt);
         BigInteger maskB = BlindSignatureMath.generateBlindFactor(admin.getModulusN());
         BigInteger blindedMsg = BlindSignatureMath.blind(commitmentX, maskB, admin.getPubExponentE(), admin.getModulusN());
         BigInteger blindSig = admin.authorizeAndSign(pesel, blindedMsg);
         BigInteger cleanSig = BlindSignatureMath.unblind(blindSig, maskB, admin.getModulusN());
 
-        int blockIndex = blockchain.submitBallot(commitmentX, cleanSig);
+        BigInteger dishonestEncryptedOpening = VoteCommitment.encryptOpening(
+                "Kandydat_Kowalski", salt, blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
+        );
+        blockchain.submitBallot(commitmentX, cleanSig, dishonestEncryptedOpening);
 
-        // Phase 3: Voter tries to lie and reveal "Kandydat Kowalski" with the same salt
-        assertThrows(SecurityException.class, () ->{
-            blockchain.revealVote(blockIndex, "Kandydat Kowalski", salt);
+        assertThrows(SecurityException.class, () -> {
+            blockchain.closePollsAndRevealAll();
         });
     }
 
 
     @Test
-    void shouldSuccessfullyCompleteFullHonestVotingCycle(){
+    void shouldSuccessfullyCompleteSingleClickVotingAndAutoReveal(){
         ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
         VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
 
-        String pesel = generateValidPesel("0122149876");// Born 14.02.2001
+        String pesel = generateValidPesel("0122149876");
         String candidate = "Kandydat Nowak";
         String salt = VoteCommitment.generateSalt();
 
-        // Phase 1 Blind signature
+        // phase 1
         BigInteger commitmentX = VoteCommitment.createCommitment(candidate, salt);
         BigInteger maskB = BlindSignatureMath.generateBlindFactor(admin.getModulusN());
         BigInteger blindedMsg = BlindSignatureMath.blind(commitmentX, maskB, admin.getPubExponentE(), admin.getModulusN());
         BigInteger blindSig = admin.authorizeAndSign(pesel, blindedMsg);
         BigInteger cleanSig = BlindSignatureMath.unblind(blindSig, maskB, admin.getModulusN());
 
-        // Phase 2 Submit to blockchain
-        int blockIndex = blockchain.submitBallot(commitmentX, cleanSig);
+        // phase 2
+        BigInteger encryptedOpening = VoteCommitment.encryptOpening(
+                "Kandydat Nowak", salt, blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
+        );
+        int blockIndex = blockchain.submitBallot(commitmentX, cleanSig, encryptedOpening);
 
-        // Phase 3 Reveal vote
-        blockchain.revealVote(blockIndex, candidate, salt);
+        // phase 3
+        blockchain.closePollsAndRevealAll();
 
-        // Phase 4 Verify blockchain integrity
+        assertEquals(candidate, blockchain.getChain().get(blockIndex).revealedCandidate);
         assertTrue(blockchain.isChainValid());
     }
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

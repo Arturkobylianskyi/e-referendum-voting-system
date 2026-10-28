@@ -1,7 +1,5 @@
 import java.time.LocalDate;
 import java.time.Period;
-import java.util.ArrayList;
-import java.util.List;
 
 public class PeselValidator {
     private static final int[] WEIGHTS = {1, 3, 7, 9, 1, 3, 7, 9, 1, 3};
@@ -62,27 +60,4 @@ public class PeselValidator {
 
     }
 
-//    public static void main(String[] args){
-//
-//        List<String> peselNumbers = List.of(
-//                "01210112341",
-//                "98051456789",
-//                "04272224683",
-//                "95110313571",
-//                "02323186429",
-//                "87030997537",
-//                "00261511222",
-//                "92092733447",
-//                "05220855665",
-//                "80101977883"
-//        );
-//
-//        peselNumbers.forEach((pesel) -> {
-//            LocalDate localDate = PeselValidator.extractBirthDate(pesel);
-//            System.out.println(localDate);
-//
-//            System.out.println(isAdultVoter(pesel, LocalDate.of(2026, 9, 5)));
-//        });
-//
-//    }
 }
