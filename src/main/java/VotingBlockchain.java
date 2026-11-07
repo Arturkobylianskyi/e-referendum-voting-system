@@ -82,6 +82,18 @@ public class VotingBlockchain {
 
     // Phase 2 Voter anonymously submits sealed commitment + unblinded Admin signature
     public int submitBallot(BigInteger commitmentX, BigInteger cleanSignature, BigInteger encryptedOpening) throws SecurityException{
+
+        // Commitment must look like a real SHA-256 hash
+        if(commitmentX == null || commitmentX.signum() <= 0 || commitmentX.bitLength() > 256){
+            throw new SecurityException("Rejected: commitment is not a valid SHA-256 hash");
+        }
+
+        if(cleanSignature == null
+            || cleanSignature.compareTo(BigInteger.ONE) <= 0
+            || cleanSignature.compareTo(adminModulsN) >= 0){
+            throw new SecurityException("Rejected: signature out of range");
+        }
+
         // 1. Reject duplicate ballots
         if(usedCommitments.contains(commitmentX)){
             throw new SecurityException("Rejected: This ballot commitment is already on the blockchain");

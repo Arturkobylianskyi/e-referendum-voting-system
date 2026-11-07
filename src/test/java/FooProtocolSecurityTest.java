@@ -125,6 +125,38 @@ public class FooProtocolSecurityTest {
         assertTrue(blockchain.isChainValid());
     }
 
+    @Test
+    void shouldRejectBallotForgedWithoutAdmin(){
+        ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
+        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
+
+        // Attacker picks any "signature" and computes matching x himself
+        BigInteger fakeSignature = new BigInteger("123456789");
+        BigInteger fakeCommitment = fakeSignature.modPow(admin.getPubExponentE(), admin.getModulusN());
+
+        BigInteger encryptedOpening = VoteCommitment.encryptOpening(
+                "Kandydat Nowak", VoteCommitment.generateSalt(),
+                blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
+        );
+
+        assertThrows(SecurityException.class,
+                () -> blockchain.submitBallot(fakeCommitment, fakeSignature, encryptedOpening));
+    }
+
+    @Test
+    void shouldRejectTrivialSignatureOne(){
+        ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
+        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
+
+        BigInteger encryptedOpening = VoteCommitment.encryptOpening(
+                "Kandydat Nowak", VoteCommitment.generateSalt(),
+                blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
+        );
+
+        assertThrows(SecurityException.class,
+                () -> blockchain.submitBallot(BigInteger.ONE, BigInteger.ONE, encryptedOpening));
+    }
+
 }
 
 
