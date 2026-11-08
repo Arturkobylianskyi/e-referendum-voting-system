@@ -1,12 +1,14 @@
 import org.junit.jupiter.api.Test;
 
-import javax.lang.model.element.ElementKind;
 import java.math.BigInteger;
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class FooProtocolSecurityTest {
+
+    private static final List<String> ANSWERS = List.of("TAK", "NIE");
 
     // helper valid pesel generator
     private static String generateValidPesel(String first10Digits){
@@ -71,14 +73,14 @@ public class FooProtocolSecurityTest {
     @Test
     void shouldRejectBallotWithForgedAdminSignature(){
         ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
-        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
+        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE(), ANSWERS);
 
         // Hacker creates a valid commitment, but invents a fake RSA signature without going to Admin
         String salt = VoteCommitment.generateSalt();
-        BigInteger commitmentX = VoteCommitment.createCommitment("Kandydat Nowak", salt);
+        BigInteger commitmentX = VoteCommitment.createCommitment("TAK", salt);
         BigInteger forgetSignature = BigInteger.valueOf(999999999);
         BigInteger encryptedOpening = VoteCommitment.encryptOpening(
-                "Kandydat Nowak", salt, blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
+                "TAK", salt, blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
         );
 
         // Blockchain must reject the ballot because RSA signature varification fails
@@ -91,11 +93,11 @@ public class FooProtocolSecurityTest {
     @Test
     void shouldMarkMismatchedBallotAsInvalid(){
         ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
-        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
+        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE(), ANSWERS);
 
         //dishonest voter: commits to Nowak, but encrypts Kowalski
         int idx = castVote(admin, blockchain, generateValidPesel("9511205432"),
-                "Kandydat Nowak", "Kandydat Kowalski");
+                "TAK", "NIE");
 
         assertDoesNotThrow(blockchain::closePollsAndRevealAll);
 
@@ -107,18 +109,18 @@ public class FooProtocolSecurityTest {
     @Test
     void oneInvalidBallotShouldNotBlockCountingOfOthers(){
         ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
-        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
+        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE(), ANSWERS);
 
         int badIdx = castVote(admin, blockchain, generateValidPesel("9511205432"),
-                "Kandydat Nowak", "kandydat Nowak");
+                "TAK", "NIE");
 
         int goodidx = castVote(admin, blockchain, generateValidPesel("9905151234"),
-                "Kandydat Nowak", "Kandydat Nowak");
+                "TAK", "TAK");
 
         blockchain.closePollsAndRevealAll();
 
         assertTrue(blockchain.getChain().get(badIdx).invalid);
-        assertEquals("Kandydat Nowak", blockchain.getChain().get(goodidx).revealedCandidate);
+        assertEquals("TAK", blockchain.getChain().get(goodidx).revealedCandidate);
         assertTrue(blockchain.isChainValid());
     }
 
@@ -126,10 +128,10 @@ public class FooProtocolSecurityTest {
     @Test
     void shouldSuccessfullyCompleteSingleClickVotingAndAutoReveal(){
         ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
-        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
+        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE(), ANSWERS);
 
         String pesel = generateValidPesel("0122149876");
-        String candidate = "Kandydat Nowak";
+        String candidate = "TAK";
         String salt = VoteCommitment.generateSalt();
 
         // phase 1
@@ -141,7 +143,7 @@ public class FooProtocolSecurityTest {
 
         // phase 2
         BigInteger encryptedOpening = VoteCommitment.encryptOpening(
-                "Kandydat Nowak", salt, blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
+                "TAK", salt, blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
         );
         int blockIndex = blockchain.submitBallot(commitmentX, cleanSig, encryptedOpening);
 
@@ -155,14 +157,14 @@ public class FooProtocolSecurityTest {
     @Test
     void shouldRejectBallotForgedWithoutAdmin(){
         ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
-        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
+        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE(), ANSWERS);
 
         // Attacker picks any "signature" and computes matching x himself
         BigInteger fakeSignature = new BigInteger("123456789");
         BigInteger fakeCommitment = fakeSignature.modPow(admin.getPubExponentE(), admin.getModulusN());
 
         BigInteger encryptedOpening = VoteCommitment.encryptOpening(
-                "Kandydat Nowak", VoteCommitment.generateSalt(),
+                "TAK", VoteCommitment.generateSalt(),
                 blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
         );
 
@@ -173,10 +175,10 @@ public class FooProtocolSecurityTest {
     @Test
     void shouldRejectTrivialSignatureOne(){
         ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
-        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
+        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE(), ANSWERS);
 
         BigInteger encryptedOpening = VoteCommitment.encryptOpening(
-                "Kandydat Nowak", VoteCommitment.generateSalt(),
+                "TAK", VoteCommitment.generateSalt(),
                 blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
         );
 
@@ -187,10 +189,10 @@ public class FooProtocolSecurityTest {
     @Test
     void shouldKeepBallotsSealedWhilePollsOpen(){
         ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
-        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
+        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE(), ANSWERS);
 
         int idx = castVote(admin, blockchain, generateValidPesel("9905151234"),
-                "Kandydat Nowak", "Kandydat Nowak");
+                "TAK", "TAK");
 
         // before closing nobody knows the vote
         assertTrue(blockchain.isPollsOpen());
@@ -200,15 +202,15 @@ public class FooProtocolSecurityTest {
     @Test
     void shouldRejectBallotAfterPollsClosed(){
         ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
-        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
+        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE(), ANSWERS);
 
         castVote(admin, blockchain, generateValidPesel("9905151234"),
-                "Kandydat Nowak", "Kandydat Nowak");
+                "TAK", "TAK");
         blockchain.closePollsAndRevealAll();
 
         assertThrows(SecurityException.class, () -> {
             castVote(admin, blockchain, generateValidPesel("9511205432"),
-                    "Kandydat Kowalski", "Kandydat Kowalski");
+                    "NIE", "NIE");
         });
 
         assertEquals(1, blockchain.getChain().size());
@@ -217,12 +219,37 @@ public class FooProtocolSecurityTest {
     @Test
     void shouldNotAllowClosingPollsTwice(){
         ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
-        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
+        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE(), ANSWERS);
 
         blockchain.closePollsAndRevealAll();
 
         assertFalse(blockchain.isPollsOpen());
         assertThrows(IllegalStateException.class, blockchain::closePollsAndRevealAll);
+    }
+
+    @Test
+    void shouldMarkAnswerOutsideBallotAsInvalid() {
+        ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
+        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE(), ANSWERS);
+
+        int idx = castVote(admin, blockchain, generateValidPesel("9905151234"), "MOZE", "MOZE");
+
+        blockchain.closePollsAndRevealAll();
+
+        assertTrue(blockchain.getChain().get(idx).invalid);
+        assertNull(blockchain.getChain().get(idx).revealedCandidate);
+    }
+
+    @Test
+    void shouldRejectInvalidAnswerList(){
+        ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
+        BigInteger n = admin.getModulusN();
+        BigInteger e = admin.getPubExponentE();
+
+        assertThrows(IllegalArgumentException.class, () -> new VotingBlockchain(n, e, List.of("TAK")));
+        assertThrows(IllegalArgumentException.class, () -> new VotingBlockchain(n, e, List.of("TAK", "TAK")));
+        assertThrows(IllegalArgumentException.class, () -> new VotingBlockchain(n, e, List.of("TAK", "N:IE")));
+        assertThrows(IllegalArgumentException.class, () -> new VotingBlockchain(n, e, List.of("TAK", " ")));
     }
 
 }

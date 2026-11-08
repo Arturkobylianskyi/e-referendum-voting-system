@@ -50,9 +50,23 @@ public class VotingBlockchain {
 
     private final List<Block> chain = new ArrayList<>();
     private final Set<BigInteger> usedCommitments = new HashSet<>();
-    public boolean pollsOpen = true;
+    private boolean pollsOpen = true;
+    private final List<String> allowedAnswers;
 
-    public VotingBlockchain(BigInteger adminModulsN, BigInteger adminPubExponentE) throws RuntimeException{
+    public VotingBlockchain(BigInteger adminModulsN, BigInteger adminPubExponentE, List<String> allowedAnswers) throws RuntimeException{
+        if(allowedAnswers == null || allowedAnswers.size() < 2){
+            throw new IllegalArgumentException("Referendum needs at least 2 answers");
+        }
+        for(String answer : allowedAnswers){
+            if(answer == null || answer.isBlank() || answer.contains(":")){
+                throw new IllegalArgumentException("Invalid answer: " + answer);
+            }
+        }
+        if(new HashSet<>(allowedAnswers).size() != allowedAnswers.size()){
+            throw new IllegalArgumentException("Answer must not repeat");
+        }
+
+        this.allowedAnswers = List.copyOf(allowedAnswers);
         this.adminModulsN = adminModulsN;
         this.adminPubExponentE = adminPubExponentE;
 
@@ -70,6 +84,10 @@ public class VotingBlockchain {
         } catch (Exception e){
             throw new RuntimeException("Failed to initialize Tally RSA keys", e);
         }
+    }
+
+    public List<String> getAllowedAnswers(){
+        return allowedAnswers;
     }
 
     public BigInteger getTallyModulusN(){
@@ -157,6 +175,11 @@ public class VotingBlockchain {
                     continue;
                 }
 
+                if(!allowedAnswers.contains(candidate)){
+                    markInvalid(block, "answer not on the ballot");
+                    continue;
+                }
+
                 block.revealedCandidate = candidate;
                 block.revealedSalt = salt;
 
@@ -199,7 +222,10 @@ public class VotingBlockchain {
     public void printResult(){
         System.out.println("\nBlockchain ledger audit (Chain Valid: " + isChainValid() + ")");
 
-        Map<String, Integer> tally = new HashMap<>();
+        Map<String, Integer> tally = new LinkedHashMap<>();
+        for(String answer : allowedAnswers){
+            tally.put(answer, 0);
+        }
         int invalidCount = 0;
 
         for(Block b : chain){
@@ -220,11 +246,11 @@ public class VotingBlockchain {
             }
         }
 
-        System.out.println("\nFinal election tally");
-        if(tally.isEmpty()){
+        System.out.println("\nFinal referendum result");
+        if(pollsOpen){
             System.out.println("No votes revealed yet (Polls are still open).");
         }else{
-            tally.forEach((candidate, count) -> System.out.println(candidate + ": " + count + " vote(s)"));
+            tally.forEach((answer, count) -> System.out.println(answer + ": " + count + " vote(s)"));
         }
         System.out.println("Invalid ballots: " + invalidCount);
     }

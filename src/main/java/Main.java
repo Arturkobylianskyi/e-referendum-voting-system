@@ -44,12 +44,12 @@ public class Main {
         LocalDate electionDay = LocalDate.now();
 
         ElectionAdmin admin = new ElectionAdmin(electionDay);
-        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE());
+        VotingBlockchain blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE(), List.of("TAK", "NIE"));
 
         List<VoterClient> voters = new ArrayList<>(List.of(
-                new VoterClient(generateValidPesel("9905151234"), "Kandydat Nowak"),
-                new VoterClient(generateValidPesel("9511205432"), "Kandydat Kowalski"),
-                new VoterClient(generateValidPesel("0324106789"), "Kandydat Nowak")
+                new VoterClient(generateValidPesel("9905151234"), "TAK"),
+                new VoterClient(generateValidPesel("9511205432"), "NIE"),
+                new VoterClient(generateValidPesel("0324106789"), "TAK")
         ));
 
         System.out.println("Phase 1 Registration and blind signature ");
