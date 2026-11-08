@@ -21,6 +21,9 @@ public class VotingBlockchain {
         public String revealedCandidate = null;
         public String revealedSalt = null;
 
+        public boolean invalid = false;
+        public String invalidReason = null;
+
         public Block(int index, BigInteger commitmentX, BigInteger cleanSignature, BigInteger encryptedOpening, String previousHash){
             this.index = index;
             this.commitmentX =commitmentX;
@@ -47,6 +50,7 @@ public class VotingBlockchain {
 
     private final List<Block> chain = new ArrayList<>();
     private final Set<BigInteger> usedCommitments = new HashSet<>();
+    public boolean pollsOpen = true;
 
     public VotingBlockchain(BigInteger adminModulsN, BigInteger adminPubExponentE) throws RuntimeException{
         this.adminModulsN = adminModulsN;
@@ -80,8 +84,16 @@ public class VotingBlockchain {
         return chain;
     }
 
+    public boolean isPollsOpen(){
+        return pollsOpen;
+    }
+
     // Phase 2 Voter anonymously submits sealed commitment + unblinded Admin signature
     public int submitBallot(BigInteger commitmentX, BigInteger cleanSignature, BigInteger encryptedOpening) throws SecurityException{
+
+        if(!pollsOpen){
+            throw new SecurityException("Rejected: polls are closed");
+        }
 
         // Commitment must look like a real SHA-256 hash
         if(commitmentX == null || commitmentX.signum() <= 0 || commitmentX.bitLength() > 256){
@@ -118,33 +130,47 @@ public class VotingBlockchain {
 
     // Phase 3(Reveal) : Voter anonymously sends (blockIndex, candidate, salt) to open their ballot
     public void closePollsAndRevealAll(){
+        if(!pollsOpen){
+            throw new IllegalStateException("Polls are already closed");
+        }
+        pollsOpen = false;
+
         for(Block block : chain){
-            if(block.revealedCandidate != null){
-                continue;
+            try{
+                // 1. Decrypt candidate:salt using Tally Private Key
+                String decryptedPayload = VoteCommitment.decryptOpening(
+                        block.encryptedOpening, tallyPrivExponentD, tallyModulusN
+                );
+
+                String[] parts = decryptedPayload.split(":", 2);
+                if(parts.length != 2){
+                    markInvalid(block, "corrupted payload format");
+                    continue;
+                }
+
+                String candidate = parts[0];
+                String salt = parts[1];
+
+                // 2. Decrypted candidate + salt must match commitmentX
+                if(!VoteCommitment.verifyCommitment(block.commitmentX, candidate, salt)){
+                    markInvalid(block, "decrypted vote does not match commitment");
+                    continue;
+                }
+
+                block.revealedCandidate = candidate;
+                block.revealedSalt = salt;
+
+
+            } catch (RuntimeException e){
+                markInvalid(block, "could not decrypt or verify ballot");
             }
-
-            // 1. Decrypt "candidate:salt" using Tally Private Key
-            String decryptedPayload = VoteCommitment.decryptOpening(
-                    block.encryptedOpening, tallyPrivExponentD, tallyModulusN
-            );
-            String[] parts = decryptedPayload.split(":", 2);
-            if(parts.length !=2 ){
-                throw new SecurityException("Corrupted payload format in Block #" + block.index);
-            }
-
-            String candidate = parts[0];
-            String salt = parts[1];
-
-            // 2. Verify that decrypted candidate + salt matches the morning commitmentX
-            boolean isMatching = VoteCommitment.verifyCommitment(block.commitmentX, candidate, salt);
-            if(!isMatching){
-                throw new SecurityException("Integrity failure: Decrypted vote does not match commitmentX in Block #" + block.index);
-            }
-
-            block.revealedCandidate = candidate;
-            block.revealedSalt = salt;
 
         }
+    }
+
+    private void markInvalid(Block block, String reason){
+        block.invalid = true;
+        block.invalidReason = reason;
     }
 
     // Audit: Verifies that no block in the chain has been tampered with
@@ -174,13 +200,20 @@ public class VotingBlockchain {
         System.out.println("\nBlockchain ledger audit (Chain Valid: " + isChainValid() + ")");
 
         Map<String, Integer> tally = new HashMap<>();
+        int invalidCount = 0;
 
         for(Block b : chain){
             System.out.printf("Block #%d | PrevHash: %s... | BlockHash: %s... | Vote: %s%n",
                     b.index,
                     b.previousHash.substring(0, 8),
                     b.currentHash.substring(0, 8),
-                    b.revealedCandidate != null ? b.revealedCandidate : "[SEALED]");
+                    b.revealedCandidate != null ? b.revealedCandidate
+                            : b.invalid ? "[INVALID: " + b.invalidReason + "]"
+                            : "[SEALED]");
+
+            if(b.invalid){
+                invalidCount++;
+            }
 
             if(b.revealedCandidate != null){
                 tally.merge(b.revealedCandidate, 1, Integer::sum);
@@ -193,6 +226,7 @@ public class VotingBlockchain {
         }else{
             tally.forEach((candidate, count) -> System.out.println(candidate + ": " + count + " vote(s)"));
         }
+        System.out.println("Invalid ballots: " + invalidCount);
     }
 
 }
