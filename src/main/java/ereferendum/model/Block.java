@@ -1,4 +1,6 @@
-package ereferendum;
+package ereferendum.model;
+
+import ereferendum.crypto.VoteCommitment;
 
 import java.math.BigInteger;
 

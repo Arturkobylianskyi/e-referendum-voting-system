@@ -1,3 +1,11 @@
+package ereferendum;
+
+import ereferendum.crypto.BlindSignatureMath;
+import ereferendum.crypto.VoteCommitment;
+import ereferendum.service.ElectionAdmin;
+import ereferendum.service.PeselValidator;
+import ereferendum.service.VotingBlockchain;
+
 import java.math.BigInteger;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -72,7 +80,7 @@ public class Main {
             );
 
             v.blockIndex = blockchain.submitBallot(v.commitmentX, v.cleanSignature, encryptedOpening );
-            System.out.println("[OK] Anonymous sealed ballot stored in Block #" + v.blockIndex);
+            System.out.println("[OK] Anonymous sealed ballot stored in ereferendum.model.Block #" + v.blockIndex);
         }
 
         blockchain.printResult();

@@ -1,3 +1,11 @@
+package ereferendum;
+
+import ereferendum.crypto.BlindSignatureMath;
+import ereferendum.crypto.VoteCommitment;
+import ereferendum.model.Block;
+import ereferendum.service.ElectionAdmin;
+import ereferendum.service.PeselValidator;
+import ereferendum.service.VotingBlockchain;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

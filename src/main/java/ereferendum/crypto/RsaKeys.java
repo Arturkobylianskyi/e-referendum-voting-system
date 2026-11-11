@@ -1,4 +1,4 @@
-package ereferendum;
+package ereferendum.crypto;
 
 import java.math.BigInteger;
 import java.security.KeyPair;
