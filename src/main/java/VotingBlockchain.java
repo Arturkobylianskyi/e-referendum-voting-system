@@ -48,7 +48,7 @@ public class VotingBlockchain {
     }
 
     public BigInteger getTallyModulusN(){
-        return tallyKeys.modulsN();
+        return tallyKeys.modulusN();
     }
 
     public BigInteger getTallyPubExponentE(){
@@ -120,7 +120,7 @@ public class VotingBlockchain {
         try{
             // 1. Decrypt candidate:salt using Tally Private Key
             String decryptedPayload = VoteCommitment.decryptOpening(
-                    block.encryptedOpening, tallyKeys.privateExponentD(), tallyKeys.modulsN()
+                    block.encryptedOpening, tallyKeys.privateExponentD(), tallyKeys.modulusN()
             );
 
             String[] parts = decryptedPayload.split(":", 2);

@@ -78,7 +78,6 @@ public class Main {
         blockchain.printResult();
 
         System.out.println("Phase 3: Anonymous reveal after referendum");
-        Collections.shuffle(voters);
 
         blockchain.closePollsAndRevealAll();
         System.out.println("[OK] Polls closed ! Blockchain decrypted and verified all ballots.");

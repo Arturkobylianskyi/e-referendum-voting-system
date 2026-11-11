@@ -18,7 +18,7 @@ public class ElectionAdmin {
     }
 
     public BigInteger getModulusN(){
-        return keys.modulsN();
+        return keys.modulusN();
     }
 
     public BigInteger getPubExponentE(){
@@ -39,7 +39,7 @@ public class ElectionAdmin {
 
         // 3. Record PESEL and sign the blinded message
         usedPesel.add(pesel);
-        return BlindSignatureMath.blindSign(blindedMsg, keys.privateExponentD(), keys.modulsN());
+        return BlindSignatureMath.blindSign(blindedMsg, keys.privateExponentD(), keys.modulusN());
     }
 
 

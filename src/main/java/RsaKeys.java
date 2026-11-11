@@ -5,6 +5,12 @@ import java.security.NoSuchAlgorithmException;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 
+/**
+ * Holder for a generated 2048-bit RSA key pair
+ * providing direct access to BigInteger modulus and exponents.
+ * @param publicKey
+ * @param privateKey
+ */
 public record RsaKeys(RSAPublicKey publicKey, RSAPrivateKey privateKey) {
 
     private static final int KEY_SIZE = 2048;
@@ -20,7 +26,7 @@ public record RsaKeys(RSAPublicKey publicKey, RSAPrivateKey privateKey) {
         }
     }
 
-    public BigInteger modulsN(){
+    public BigInteger modulusN(){
         return publicKey.getModulus();
     }
 
