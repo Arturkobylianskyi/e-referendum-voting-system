@@ -1,3 +1,4 @@
+import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.Period;
 
@@ -38,6 +39,9 @@ public class PeselValidator {
         else if(month >= 21 && month <= 32){
             year += 2000;
             month -= 20;
+        }else if(month >= 41 && month <=52){
+            year += 2100;
+            month -= 40;
         }
         else if(month >= 81 && month <= 92){
             year += 1800;
@@ -47,17 +51,23 @@ public class PeselValidator {
             throw new IllegalArgumentException("Incorrect month in pesel");
         }
 
-        return LocalDate.of(year, month, day);
+        try{
+            return LocalDate.of(year, month, day);
+        } catch(DateTimeException e){
+            throw new IllegalArgumentException("Invalid calendar date in pesel: "+ pesel, e);
+        }
     }
 
-    public static boolean isAdultVoter(String pesel, LocalDate electionDate){
-        if(!isValidChecksum(pesel)){
+    public static boolean isAdultVoter(String pesel, LocalDate electionDate) {
+        if (!isValidChecksum(pesel)) {
             return false;
         }
-
-        LocalDate birthDate = extractBirthDate(pesel);
-        return Period.between(birthDate, electionDate).getYears() >= 18;
-
+        try {
+            LocalDate birthDate = extractBirthDate(pesel);
+            return Period.between(birthDate, electionDate).getYears() >= 18;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
 }
