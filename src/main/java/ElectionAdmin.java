@@ -1,8 +1,4 @@
 import java.math.BigInteger;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.interfaces.RSAPrivateKey;
-import java.security.interfaces.RSAPublicKey;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
@@ -19,22 +15,10 @@ public class ElectionAdmin {
     public ElectionAdmin(LocalDate electionDate){
         this.electionDate = electionDate;
 
-        try{
-            // Generate 2048-bit RSA key pair on startup
-            KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
-            keyGen.initialize(2048);
-            KeyPair pair = keyGen.generateKeyPair();
-
-            RSAPublicKey pub = (RSAPublicKey) pair.getPublic();
-            RSAPrivateKey priv = (RSAPrivateKey) pair.getPrivate();
-
-            this.modulusN = pub.getModulus();
-            this.pubExponentE = pub.getPublicExponent();
-            this.privExponentD = priv.getPrivateExponent();
-
-        } catch(Exception e){
-            throw new RuntimeException("Failed to initialize Admin RSA keys", e);
-        }
+        RsaKeys keys = RsaKeys.generate();
+        this.modulusN = keys.modulsN();
+        this.pubExponentE = keys.publicExponentE();
+        this.privExponentD = keys.privateExponentD();
     }
 
     public BigInteger getModulusN(){

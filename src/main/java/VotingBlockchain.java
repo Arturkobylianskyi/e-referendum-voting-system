@@ -1,8 +1,4 @@
 import java.math.BigInteger;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.interfaces.RSAPrivateKey;
-import java.security.interfaces.RSAPublicKey;
 import java.util.*;
 
 public class VotingBlockchain {
@@ -40,8 +36,8 @@ public class VotingBlockchain {
         }
     }
 
-    private final BigInteger adminModulsN;
-    private final BigInteger adminPubExponentE;
+    private final BigInteger adminModulus;
+    private final BigInteger adminPublicExponent;
 
     // Blockchain's own key pair for time-locked automatic opening after referendum
     private final BigInteger tallyModulusN;
@@ -50,10 +46,10 @@ public class VotingBlockchain {
 
     private final List<Block> chain = new ArrayList<>();
     private final Set<BigInteger> usedCommitments = new HashSet<>();
-    private boolean pollsOpen = true;
+    private  boolean pollsOpen = true;
     private final List<String> allowedAnswers;
 
-    public VotingBlockchain(BigInteger adminModulsN, BigInteger adminPubExponentE, List<String> allowedAnswers) throws RuntimeException{
+    public VotingBlockchain(BigInteger adminModulus, BigInteger adminPublicExponent, List<String> allowedAnswers){
         if(allowedAnswers == null || allowedAnswers.size() < 2){
             throw new IllegalArgumentException("Referendum needs at least 2 answers");
         }
@@ -67,23 +63,13 @@ public class VotingBlockchain {
         }
 
         this.allowedAnswers = List.copyOf(allowedAnswers);
-        this.adminModulsN = adminModulsN;
-        this.adminPubExponentE = adminPubExponentE;
+        this.adminModulus = adminModulus;
+        this.adminPublicExponent = adminPublicExponent;
 
-        try{
-            KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
-            keyGen.initialize(2048);
-            KeyPair pair = keyGen.generateKeyPair();
-
-            RSAPublicKey pub = (RSAPublicKey) pair.getPublic();
-            RSAPrivateKey priv = (RSAPrivateKey) pair.getPrivate();
-
-            this.tallyModulusN = pub.getModulus();
-            this.tallyPubExponentE = pub.getPublicExponent();
-            this.tallyPrivExponentD = priv.getPrivateExponent();
-        } catch (Exception e){
-            throw new RuntimeException("Failed to initialize Tally RSA keys", e);
-        }
+        RsaKeys tallyKeys = RsaKeys.generate();
+        this.tallyModulusN = tallyKeys.modulsN();
+        this.tallyPubExponentE = tallyKeys.publicExponentE();
+        this.tallyPrivExponentD = tallyKeys.privateExponentD();
     }
 
     public List<String> getAllowedAnswers(){
@@ -120,7 +106,7 @@ public class VotingBlockchain {
 
         if(cleanSignature == null
             || cleanSignature.compareTo(BigInteger.ONE) <= 0
-            || cleanSignature.compareTo(adminModulsN) >= 0){
+            || cleanSignature.compareTo(adminModulus) >= 0){
             throw new SecurityException("Rejected: signature out of range");
         }
 
@@ -130,7 +116,7 @@ public class VotingBlockchain {
         }
 
         // 2. Verify Admin's RSA signature using Utility #3
-        boolean isSigValid = BlindSignatureMath.verifySignature(commitmentX, cleanSignature, adminPubExponentE, adminModulsN);
+        boolean isSigValid = BlindSignatureMath.verifySignature(commitmentX, cleanSignature, adminPublicExponent, adminModulus);
         if(!isSigValid){
             throw new SecurityException("Rejected: Invalid Admin RSA signature!");
         }
