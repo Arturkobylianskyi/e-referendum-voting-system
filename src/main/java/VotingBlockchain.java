@@ -3,39 +3,6 @@ import java.util.*;
 
 public class VotingBlockchain {
 
-
-    // Single block in the blockchain storing one sealed ballot
-    public static class Block{
-        public final int index;
-        public final BigInteger commitmentX;
-        public final BigInteger cleanSignature;
-        public final BigInteger encryptedOpening;
-        public final String previousHash;
-        public final String currentHash;
-
-        // filled later during Phase 3 (Reveal)
-        public String revealedCandidate = null;
-        public String revealedSalt = null;
-
-        public boolean invalid = false;
-        public String invalidReason = null;
-
-        public Block(int index, BigInteger commitmentX, BigInteger cleanSignature, BigInteger encryptedOpening, String previousHash){
-            this.index = index;
-            this.commitmentX =commitmentX;
-            this.cleanSignature = cleanSignature;
-            this.encryptedOpening = encryptedOpening;
-            this.previousHash = previousHash;
-            this.currentHash = calculateHash();
-        }
-
-        // Computes SHA-256 hash of the block's immutable fields
-        public String calculateHash() {
-            String blockData = index + ":" + commitmentX.toString(16) + ":" + cleanSignature.toString(16) + ":" + encryptedOpening.toString(16);
-            return VoteCommitment.createCommitment(blockData, previousHash).toString(16);
-        }
-    }
-
     private final BigInteger adminModulus;
     private final BigInteger adminPublicExponent;
 
@@ -50,17 +17,7 @@ public class VotingBlockchain {
     private final List<String> allowedAnswers;
 
     public VotingBlockchain(BigInteger adminModulus, BigInteger adminPublicExponent, List<String> allowedAnswers){
-        if(allowedAnswers == null || allowedAnswers.size() < 2){
-            throw new IllegalArgumentException("Referendum needs at least 2 answers");
-        }
-        for(String answer : allowedAnswers){
-            if(answer == null || answer.isBlank() || answer.contains(":")){
-                throw new IllegalArgumentException("Invalid answer: " + answer);
-            }
-        }
-        if(new HashSet<>(allowedAnswers).size() != allowedAnswers.size()){
-            throw new IllegalArgumentException("Answer must not repeat");
-        }
+        validateAnswer(allowedAnswers);
 
         this.allowedAnswers = List.copyOf(allowedAnswers);
         this.adminModulus = adminModulus;
@@ -72,8 +29,18 @@ public class VotingBlockchain {
         this.tallyPrivExponentD = tallyKeys.privateExponentD();
     }
 
-    public List<String> getAllowedAnswers(){
-        return allowedAnswers;
+    private void validateAnswer(List<String> allowedAnswers){
+        if(allowedAnswers == null || allowedAnswers.size() < 2){
+            throw new IllegalArgumentException("Referendum needs at least 2 answers");
+        }
+        for(String answer : allowedAnswers){
+            if(answer == null || answer.isBlank() || answer.contains(":")){
+                throw new IllegalArgumentException("Invalid answer: " + answer);
+            }
+        }
+        if(new HashSet<>(allowedAnswers).size() != allowedAnswers.size()){
+            throw new IllegalArgumentException("Answer must not repeat");
+        }
     }
 
     public BigInteger getTallyModulusN(){
@@ -148,7 +115,7 @@ public class VotingBlockchain {
 
                 String[] parts = decryptedPayload.split(":", 2);
                 if(parts.length != 2){
-                    markInvalid(block, "corrupted payload format");
+                    block.markInvalid("corrupted payload format");
                     continue;
                 }
 
@@ -157,30 +124,25 @@ public class VotingBlockchain {
 
                 // 2. Decrypted candidate + salt must match commitmentX
                 if(!VoteCommitment.verifyCommitment(block.commitmentX, candidate, salt)){
-                    markInvalid(block, "decrypted vote does not match commitment");
+                    block.markInvalid("decrypted vote does not match commitment");
                     continue;
                 }
 
                 if(!allowedAnswers.contains(candidate)){
-                    markInvalid(block, "answer not on the ballot");
+                    block.markInvalid("answer not on the ballot");
                     continue;
                 }
 
-                block.revealedCandidate = candidate;
-                block.revealedSalt = salt;
+                block.reveal(candidate, salt);
 
 
             } catch (RuntimeException e){
-                markInvalid(block, "could not decrypt or verify ballot");
+                block.markInvalid("could not decrypt or verify ballot");
             }
 
         }
     }
 
-    private void markInvalid(Block block, String reason){
-        block.invalid = true;
-        block.invalidReason = reason;
-    }
 
     // Audit: Verifies that no block in the chain has been tampered with
     public boolean isChainValid(){
@@ -219,9 +181,7 @@ public class VotingBlockchain {
                     b.index,
                     b.previousHash.substring(0, 8),
                     b.currentHash.substring(0, 8),
-                    b.revealedCandidate != null ? b.revealedCandidate
-                            : b.invalid ? "[INVALID: " + b.invalidReason + "]"
-                            : "[SEALED]");
+                    b.formatStatus());
 
             if(b.invalid){
                 invalidCount++;

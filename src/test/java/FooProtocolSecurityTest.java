@@ -101,7 +101,7 @@ public class FooProtocolSecurityTest {
 
         assertDoesNotThrow(blockchain::closePollsAndRevealAll);
 
-        VotingBlockchain.Block block = blockchain.getChain().get(idx);
+        Block block = blockchain.getChain().get(idx);
         assertTrue(block.invalid);
         assertNull(block.revealedCandidate);
     }
