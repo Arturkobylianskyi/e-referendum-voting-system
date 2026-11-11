@@ -1,9 +1,11 @@
+package ereferendum;
+
 import java.math.BigInteger;
 import java.util.*;
 
 /**
  * Public ballot ledger and automatic tallying authority for the e-referendum.
- * Accepts anonymously submitted ballots signed by the ElectionAdmin, stores them in a hash-linked
+ * Accepts anonymously submitted ballots signed by the ereferendum.ElectionAdmin, stores them in a hash-linked
  * chain of blocks, and decrypts all votes using its Tally RSA private key once polls close.
  */
 public class VotingBlockchain {
@@ -206,7 +208,7 @@ public class VotingBlockchain {
         System.out.println("\nBlockchain ledger audit (Chain Valid: " + isChainValid() + ")");
 
        for(Block b: chain){
-           System.out.printf("Block #%d | PrevHash: %s | BlockHash: %s | Vote: %s%n",
+           System.out.printf("ereferendum.Block #%d | PrevHash: %s | BlockHash: %s | Vote: %s%n",
                    b.index,
                    b.previousHash.substring(0, 8),
                    b.currentHash.substring(0, 8),
