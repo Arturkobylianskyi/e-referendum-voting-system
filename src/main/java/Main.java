@@ -1,5 +1,3 @@
-import com.sun.management.VMOption;
-
 import java.math.BigInteger;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -29,14 +27,7 @@ public class Main {
 
     // helper valid pesel generator
     private static String generateValidPesel(String first10Digits){
-        int[] weight = {1, 3, 7, 9, 1, 3, 7, 9, 1, 3};
-        int sum = 0;
-        for(int i = 0; i < 10; i++){
-            sum += Character.getNumericValue(first10Digits.charAt(i)) * weight[i];
-        }
-
-        int controlDigit = (10 - (sum % 10)) % 10;
-        return first10Digits + controlDigit;
+        return PeselValidator.generateValidPesel(first10Digits);
     }
 
     public static void main(String[] args){

@@ -2,26 +2,38 @@ import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.Period;
 
+/**
+ * Utility class for validating PESEL identification numbers,
+ * extracting birthdays, and verifying voter age
+ */
 public class PeselValidator {
     private static final int[] WEIGHTS = {1, 3, 7, 9, 1, 3, 7, 9, 1, 3};
 
     private PeselValidator(){};
+
+    public static int calculateControlDigit(String first10Digits){
+        int sum = 0;
+        for(int i = 0; i < 10; i++){
+            int num = Character.getNumericValue(first10Digits.charAt(i));
+            sum += num * WEIGHTS[i];
+        }
+
+        int controlDigit = (10 - (sum % 10)) % 10;
+
+        return controlDigit;
+    }
+
+    public static String generateValidPesel(String first10Digits){
+        return first10Digits + calculateControlDigit(first10Digits);
+    }
 
     public static boolean isValidChecksum(String pesel){
         if(pesel == null || !pesel.matches("\\d{11}")){
             return false;
         }
 
-        int sum = 0;
-        for(int i = 0; i < 10; i++){
-            int num = Character.getNumericValue(pesel.charAt(i));
-            sum += num * WEIGHTS[i];
-        }
-
-        int controlDigit = (10 - (sum % 10)) % 10;
         int lastDigit = Character.getNumericValue(pesel.charAt(10));
-
-        return controlDigit == lastDigit;
+        return calculateControlDigit(pesel) == lastDigit;
     }
 
     public static LocalDate extractBirthDate(String pesel){
