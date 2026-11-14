@@ -3,44 +3,81 @@ package ereferendum;
 import ereferendum.crypto.BlindSignatureMath;
 import ereferendum.crypto.VoteCommitment;
 import ereferendum.model.Block;
+import ereferendum.model.Referendum;
+import ereferendum.model.VoterAuthorization;
+import ereferendum.repository.BlockRepository;
+import ereferendum.repository.ReferendumRepository;
+import ereferendum.repository.VoteAuthorizationRepository;
 import ereferendum.service.ElectionAdmin;
 import ereferendum.service.VotingBlockchain;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
-import java.util.List;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 public class FooProtocolSecurityTest {
 
+    private static final Long REF_ID = 1L;
     private static final List<String> ANSWERS = List.of("TAK", "NIE");
+
     private ElectionAdmin admin;
     private VotingBlockchain blockchain;
 
     @BeforeEach
-    void setUp(){
-        admin = new ElectionAdmin();
-        blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE(), ANSWERS);
+    void setUp() {
+        ReferendumRepository referendumRepository = mock(ReferendumRepository.class);
+        BlockRepository blockRepository = mock(BlockRepository.class);
+        VoteAuthorizationRepository authRepository = mock(VoteAuthorizationRepository.class);
+
+        List<Block> storedBlocks = new ArrayList<>();
+        Set<String> authorizedVoters = new HashSet<>();
+
+        when(referendumRepository.save(any(Referendum.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(blockRepository.findByReferendumIdOrderByIndexAsc(REF_ID)).thenReturn(storedBlocks);
+        when(blockRepository.existsByReferendumIdAndCommitmentX(eq(REF_ID), any()))
+                .thenAnswer(inv -> storedBlocks.stream().anyMatch(b -> b.commitmentX.equals(inv.getArgument(1))));
+        when(blockRepository.save(any(Block.class))).thenAnswer(inv -> {
+            Block b = inv.getArgument(0);
+            storedBlocks.add(b);
+            return b;
+        });
+
+        when(authRepository.existsByReferendumIdAndVoterId(eq(REF_ID), anyString()))
+                .thenAnswer(inv -> authorizedVoters.contains(inv.getArgument(1)));
+        when(authRepository.save(any(VoterAuthorization.class))).thenAnswer(inv -> {
+            VoterAuthorization auth = inv.getArgument(0);
+            authorizedVoters.add(auth.getVoterId());
+            return auth;
+        });
+
+        admin = new ElectionAdmin(referendumRepository, authRepository);
+        blockchain = new VotingBlockchain(admin, referendumRepository, blockRepository);
+
+        Referendum referendum = blockchain.createReferendum("Referendum 2026", "Czy jesteś za?", ANSWERS);
+        when(referendumRepository.findById(REF_ID)).thenReturn(Optional.of(referendum));
     }
 
-
-    // helper valid voterId generator
-    private static String generateValidVoterId(String id){
-        return "voter-"+id;
+    // Helper valid voterId generator
+    private static String generateValidVoterId(String id) {
+        return "voter-" + id;
     }
 
-    private BigInteger signCommitment(String voterId, BigInteger commitmentX){
+    private BigInteger signCommitment(String voterId, BigInteger commitmentX) {
         BigInteger maskB = BlindSignatureMath.generateBlindFactor(admin.getModulusN());
-        BigInteger blindedMsg = BlindSignatureMath.blind(commitmentX, maskB,
-                admin.getPubExponentE(), admin.getModulusN());
-        BigInteger blindSig = admin.authorizeAndSign(voterId, blindedMsg);
+        BigInteger blindedMsg = BlindSignatureMath.blind(
+                commitmentX, maskB, admin.getPubExponentE(), admin.getModulusN()
+        );
+        BigInteger blindSig = admin.authorizeAndSign(REF_ID, voterId, blindedMsg);
 
         return BlindSignatureMath.unblind(blindSig, maskB, admin.getModulusN());
     }
 
-    // helper: full voting flow for one voter, returns index of the block with the ballot
+    // Helper: full voting flow for one voter, returns index of the block with the ballot
     private int castVote(String voterId, String committedCandidate, String encryptedCandidate) {
         String salt = VoteCommitment.generateSalt();
         BigInteger commitmentX = VoteCommitment.createCommitment(committedCandidate, salt);
@@ -49,96 +86,75 @@ public class FooProtocolSecurityTest {
                 encryptedCandidate, salt, blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
         );
 
-        return blockchain.submitBallot(commitmentX, cleanSig, encryptedOpening);
+        return blockchain.submitBallot(REF_ID, commitmentX, cleanSig, encryptedOpening);
     }
 
     @Test
-    void shouldRejectBlankVoterId(){
-        assertThrows(SecurityException.class, () -> admin.authorizeAndSign("", BigInteger.valueOf(12345)));
-        assertThrows(SecurityException.class, () -> admin.authorizeAndSign(null, BigInteger.valueOf(12345)));
+    void shouldRejectBlankVoterId() {
+        assertThrows(SecurityException.class, () -> admin.authorizeAndSign(REF_ID, "", BigInteger.valueOf(12345)));
+        assertThrows(SecurityException.class, () -> admin.authorizeAndSign(REF_ID, null, BigInteger.valueOf(12345)));
     }
 
     @Test
-    void shouldBlockDoubleVotingWithSamevoterId(){
-        ElectionAdmin admin = new ElectionAdmin();
-        String validAdultvoterId = generateValidVoterId("9905151234"); // Born 15.05.1999
+    void shouldBlockDoubleVotingWithSameVoterId() {
+        String validVoterId = generateValidVoterId("9905151234");
 
-        // 1st time: Voter gets blind signature seccessfully
-        BigInteger firstSignature = admin.authorizeAndSign(validAdultvoterId, BigInteger.valueOf(77777));
+        BigInteger firstSignature = admin.authorizeAndSign(REF_ID, validVoterId, BigInteger.valueOf(77777));
         assertNotNull(firstSignature);
 
-        // 2nd time: Same voterId tries to get another signature
-        assertThrows(SecurityException.class, () -> admin.authorizeAndSign(validAdultvoterId, BigInteger.valueOf(888888)));
+        assertThrows(SecurityException.class,
+                () -> admin.authorizeAndSign(REF_ID, validVoterId, BigInteger.valueOf(888888)));
     }
 
-
     @Test
-    void shouldRejectBallotWithForgedAdminSignature(){
-       
-
-        // Hacker creates a valid commitment, but invents a fake RSA signature without going to Admin
+    void shouldRejectBallotWithForgedAdminSignature() {
         String salt = VoteCommitment.generateSalt();
         BigInteger commitmentX = VoteCommitment.createCommitment("TAK", salt);
-        BigInteger forgetSignature = BigInteger.valueOf(999999999);
+        BigInteger forgedSignature = BigInteger.valueOf(999999999);
         BigInteger encryptedOpening = VoteCommitment.encryptOpening(
                 "TAK", salt, blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
         );
 
-        // Blockchain must reject the ballot because RSA signature varification fails
-        assertThrows(SecurityException.class, () -> {
-            blockchain.submitBallot(commitmentX, forgetSignature, encryptedOpening);
-        });
+        assertThrows(SecurityException.class,
+                () -> blockchain.submitBallot(REF_ID, commitmentX, forgedSignature, encryptedOpening));
     }
 
-
     @Test
-    void shouldMarkMismatchedBallotAsInvalid(){
-        
-        int idx = castVote( generateValidVoterId("9511205432"),
-                "TAK", "NIE");
+    void shouldMarkMismatchedBallotAsInvalid() {
+        int idx = castVote(generateValidVoterId("9511205432"), "TAK", "NIE");
 
-        assertDoesNotThrow(blockchain::closePollsAndRevealAll);
+        assertDoesNotThrow(() -> blockchain.closePollsAndRevealAll(REF_ID));
 
-        Block block = blockchain.getChain().get(idx);
+        Block block = blockchain.getBlocks(REF_ID).get(idx);
         assertTrue(block.invalid);
         assertNull(block.revealedCandidate);
     }
 
     @Test
-    void oneInvalidBallotShouldNotBlockCountingOfOthers(){
-       
+    void oneInvalidBallotShouldNotBlockCountingOfOthers() {
+        int badIdx = castVote(generateValidVoterId("9511205432"), "TAK", "NIE");
+        int goodIdx = castVote(generateValidVoterId("9905151234"), "TAK", "TAK");
 
-        int badIdx = castVote( generateValidVoterId("9511205432"),
-                "TAK", "NIE");
+        blockchain.closePollsAndRevealAll(REF_ID);
 
-        int goodidx = castVote( generateValidVoterId("9905151234"),
-                "TAK", "TAK");
-
-        blockchain.closePollsAndRevealAll();
-
-        assertTrue(blockchain.getChain().get(badIdx).invalid);
-        assertEquals("TAK", blockchain.getChain().get(goodidx).revealedCandidate);
-        assertTrue(blockchain.isChainValid());
+        assertTrue(blockchain.getBlocks(REF_ID).get(badIdx).invalid);
+        assertEquals("TAK", blockchain.getBlocks(REF_ID).get(goodIdx).revealedCandidate);
+        assertTrue(blockchain.isChainValid(REF_ID));
     }
 
-
     @Test
-    void shouldSuccessfullyCompleteSingleClickVotingAndAutoReveal(){
-
+    void shouldSuccessfullyCompleteSingleClickVotingAndAutoReveal() {
         String voterId = generateValidVoterId("0122149876");
         int blockIndex = castVote(voterId, "TAK", "TAK");
 
-        blockchain.closePollsAndRevealAll();
+        blockchain.closePollsAndRevealAll(REF_ID);
 
-        assertEquals("TAK", blockchain.getChain().get(blockIndex).revealedCandidate);
-        assertTrue(blockchain.isChainValid());
+        assertEquals("TAK", blockchain.getBlocks(REF_ID).get(blockIndex).revealedCandidate);
+        assertTrue(blockchain.isChainValid(REF_ID));
     }
 
     @Test
-    void shouldRejectBallotForgedWithoutAdmin(){
-       
-
-        // Attacker picks any "signature" and computes matching x himself
+    void shouldRejectBallotForgedWithoutAdmin() {
         BigInteger fakeSignature = new BigInteger("123456789");
         BigInteger fakeCommitment = fakeSignature.modPow(admin.getPubExponentE(), admin.getModulusN());
 
@@ -148,99 +164,87 @@ public class FooProtocolSecurityTest {
         );
 
         assertThrows(SecurityException.class,
-                () -> blockchain.submitBallot(fakeCommitment, fakeSignature, encryptedOpening));
+                () -> blockchain.submitBallot(REF_ID, fakeCommitment, fakeSignature, encryptedOpening));
     }
 
     @Test
-    void shouldRejectTrivialSignatureOne(){
-       
-
+    void shouldRejectTrivialSignatureOne() {
         BigInteger encryptedOpening = VoteCommitment.encryptOpening(
                 "TAK", VoteCommitment.generateSalt(),
                 blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
         );
 
         assertThrows(SecurityException.class,
-                () -> blockchain.submitBallot(BigInteger.ONE, BigInteger.ONE, encryptedOpening));
+                () -> blockchain.submitBallot(REF_ID, BigInteger.ONE, BigInteger.ONE, encryptedOpening));
     }
 
     @Test
-    void shouldKeepBallotsSealedWhilePollsOpen(){
-       
+    void shouldKeepBallotsSealedWhilePollsOpen() {
+        int idx = castVote(generateValidVoterId("9905151234"), "TAK", "TAK");
 
-        int idx = castVote( generateValidVoterId("9905151234"),
-                "TAK", "TAK");
-
-        // before closing nobody knows the vote
-        assertTrue(blockchain.isPollsOpen());
-        assertNull(blockchain.getChain().get(idx).revealedCandidate);
+        assertTrue(blockchain.getReferendum(REF_ID).isPollsOpen());
+        assertNull(blockchain.getBlocks(REF_ID).get(idx).revealedCandidate);
     }
 
     @Test
-    void shouldRejectBallotAfterPollsClosed(){
-       
+    void shouldRejectBallotAfterPollsClosed() {
+        castVote(generateValidVoterId("9905151234"), "TAK", "TAK");
+        BigInteger preSignedCommitment = VoteCommitment.createCommitment("NIE", "salt");
+        BigInteger preSignedSig = signCommitment(generateValidVoterId("0122149876"), preSignedCommitment);
 
-        castVote( generateValidVoterId("9905151234"),
-                "TAK", "TAK");
-        blockchain.closePollsAndRevealAll();
+        blockchain.closePollsAndRevealAll(REF_ID);
 
-        assertThrows(SecurityException.class, () -> {
-            castVote( generateValidVoterId("9511205432"),
-                    "NIE", "NIE");
-        });
+        // Both new blind signature requests and late ballot submissions must be rejected
+        assertThrows(SecurityException.class,
+                () -> castVote(generateValidVoterId("9511205432"), "NIE", "NIE"));
+        assertThrows(SecurityException.class,
+                () -> blockchain.submitBallot(REF_ID, preSignedCommitment, preSignedSig, BigInteger.ONE));
 
-        assertEquals(1, blockchain.getChain().size());
+        assertEquals(1, blockchain.getBlocks(REF_ID).size());
     }
 
     @Test
-    void shouldNotAllowClosingPollsTwice(){
-       
+    void shouldNotAllowClosingPollsTwice() {
+        blockchain.closePollsAndRevealAll(REF_ID);
 
-        blockchain.closePollsAndRevealAll();
-
-        assertFalse(blockchain.isPollsOpen());
-        assertThrows(IllegalStateException.class, blockchain::closePollsAndRevealAll);
+        assertFalse(blockchain.getReferendum(REF_ID).isPollsOpen());
+        assertThrows(IllegalStateException.class, () -> blockchain.closePollsAndRevealAll(REF_ID));
     }
 
     @Test
     void shouldMarkAnswerOutsideBallotAsInvalid() {
-       
+        int idx = castVote(generateValidVoterId("9905151234"), "MOZE", "MOZE");
 
-        int idx = castVote( generateValidVoterId("9905151234"), "MOZE", "MOZE");
+        blockchain.closePollsAndRevealAll(REF_ID);
 
-        blockchain.closePollsAndRevealAll();
-
-        assertTrue(blockchain.getChain().get(idx).invalid);
-        assertNull(blockchain.getChain().get(idx).revealedCandidate);
+        assertTrue(blockchain.getBlocks(REF_ID).get(idx).invalid);
+        assertNull(blockchain.getBlocks(REF_ID).get(idx).revealedCandidate);
     }
 
     @Test
-    void shouldRejectInvalidAnswerList(){
-        ElectionAdmin admin = new ElectionAdmin();
-        BigInteger n = admin.getModulusN();
-        BigInteger e = admin.getPubExponentE();
-
-        assertThrows(IllegalArgumentException.class, () -> new VotingBlockchain(n, e, List.of("TAK")));
-        assertThrows(IllegalArgumentException.class, () -> new VotingBlockchain(n, e, List.of("TAK", "TAK")));
-        assertThrows(IllegalArgumentException.class, () -> new VotingBlockchain(n, e, List.of("TAK", "N:IE")));
-        assertThrows(IllegalArgumentException.class, () -> new VotingBlockchain(n, e, List.of("TAK", " ")));
+    void shouldRejectInvalidReferendumParameters() {
+        assertThrows(IllegalArgumentException.class, () -> blockchain.createReferendum("", "Pytanie?", ANSWERS));
+        assertThrows(IllegalArgumentException.class, () -> blockchain.createReferendum("Tytuł", " ", ANSWERS));
+        assertThrows(IllegalArgumentException.class, () -> blockchain.createReferendum("Tytuł", "Pytanie?", List.of("TAK")));
+        assertThrows(IllegalArgumentException.class, () -> blockchain.createReferendum("Tytuł", "Pytanie?", List.of("TAK", "TAK")));
+        assertThrows(IllegalArgumentException.class, () -> blockchain.createReferendum("Tytuł", "Pytanie?", List.of("TAK", "N:IE")));
+        assertThrows(IllegalArgumentException.class, () -> blockchain.createReferendum("Tytuł", "Pytanie?", List.of("TAK", " ")));
     }
 
-
     @Test
-    void shouldCorrectlyCountValidAndInvalidVotes(){
-        assertEquals(ANSWERS, blockchain.getAllowedAnswers());
+    void shouldCorrectlyCountValidAndInvalidVotes() {
+        assertEquals(ANSWERS, blockchain.getReferendum(REF_ID).getAllowedAnswers());
 
-        castVote( generateValidVoterId("9905151234"), "TAK", "TAK");
-        castVote( generateValidVoterId("9511205432"), "NIE", "NIE");
-        castVote( generateValidVoterId("0122149876"), "TAK", "TAK");
-        castVote( generateValidVoterId("9001011234"), "TAK", "NIE");
+        castVote(generateValidVoterId("9905151234"), "TAK", "TAK");
+        castVote(generateValidVoterId("9511205432"), "NIE", "NIE");
+        castVote(generateValidVoterId("0122149876"), "TAK", "TAK");
+        castVote(generateValidVoterId("9001011234"), "TAK", "NIE");
 
-        blockchain.closePollsAndRevealAll();
+        blockchain.closePollsAndRevealAll(REF_ID);
 
-        assertEquals(2, blockchain.countVotes().get("TAK"));
-        assertEquals(1, blockchain.countVotes().get("NIE"));
-        assertEquals(1, blockchain.countInvalidBallots());
+        assertEquals(2, blockchain.countVotes(REF_ID).get("TAK"));
+        assertEquals(1, blockchain.countVotes(REF_ID).get("NIE"));
+        assertEquals(1, blockchain.countInvalidBallots(REF_ID));
     }
 
     @Test
@@ -252,54 +256,31 @@ public class FooProtocolSecurityTest {
                 "TAK", salt, blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
         );
 
-        blockchain.submitBallot(commitmentX, cleanSig, encryptedOpening);
+        blockchain.submitBallot(REF_ID, commitmentX, cleanSig, encryptedOpening);
 
         assertThrows(SecurityException.class,
-                () -> blockchain.submitBallot(commitmentX, cleanSig, encryptedOpening));
+                () -> blockchain.submitBallot(REF_ID, commitmentX, cleanSig, encryptedOpening));
     }
 
     @Test
     void shouldHandleCorruptedEncryptedPayloadAndFormatBlockStatus() {
         int validIdx = castVote(generateValidVoterId("9905151234"), "TAK", "TAK");
-        assertEquals("[SEALED]", blockchain.getChain().get(validIdx).formatStatus());
+        assertEquals("[SEALED]", blockchain.getBlocks(REF_ID).get(validIdx).formatStatus());
 
         BigInteger commitmentX = VoteCommitment.createCommitment("NIE", VoteCommitment.generateSalt());
         BigInteger cleanSig = signCommitment(generateValidVoterId("9511205432"), commitmentX);
-        int corruptedIdx = blockchain.submitBallot(commitmentX, cleanSig, BigInteger.valueOf(12345));
+        int corruptedIdx = blockchain.submitBallot(REF_ID, commitmentX, cleanSig, BigInteger.valueOf(12345));
 
-        blockchain.closePollsAndRevealAll();
+        blockchain.closePollsAndRevealAll(REF_ID);
 
-        assertEquals("TAK", blockchain.getChain().get(validIdx).formatStatus());
-        assertTrue(blockchain.getChain().get(corruptedIdx).formatStatus().startsWith("[INVALID:"));
+        assertEquals("TAK", blockchain.getBlocks(REF_ID).get(validIdx).formatStatus());
+        assertTrue(blockchain.getBlocks(REF_ID).get(corruptedIdx).formatStatus().startsWith("[INVALID:"));
     }
-    
 
     @Test
-    void shouldRejectBlankVoteOrSaltInCommitment(){
+    void shouldRejectBlankVoteOrSaltInCommitment() {
         assertThrows(IllegalArgumentException.class, () -> VoteCommitment.createCommitment("", "salt123"));
         assertThrows(IllegalArgumentException.class, () -> VoteCommitment.createCommitment("TAK", " "));
         assertThrows(IllegalArgumentException.class, () -> VoteCommitment.createCommitment(null, "salt123"));
     }
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

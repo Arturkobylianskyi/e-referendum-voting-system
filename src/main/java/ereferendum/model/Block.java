@@ -2,6 +2,7 @@ package ereferendum.model;
 
 import ereferendum.crypto.VoteCommitment;
 import jakarta.persistence.*;
+import lombok.Getter;
 
 import java.math.BigInteger;
 
@@ -11,6 +12,7 @@ import java.math.BigInteger;
  */
 @Entity
 @Table(name="blocks")
+@Getter
 public class Block{
 
     @Id
@@ -54,6 +56,11 @@ public class Block{
         this.encryptedOpening = encryptedOpening;
         this.previousHash = previousHash;
         this.currentHash = calculateHash();
+    }
+
+    public Block(Referendum referendum, int index, BigInteger commitmentX, BigInteger cleanSignature, BigInteger encryptedOpening, String previousHash){
+        this(index, commitmentX, cleanSignature, encryptedOpening, previousHash);
+        this.referendum =  referendum;
     }
 
     // Computes SHA-256 hash of the block's immutable fields

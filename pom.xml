@@ -18,6 +18,7 @@
     <properties>
         <java.version>25</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.proc>full</maven.compiler.proc>
     </properties>
 
     <dependencies>
@@ -45,7 +46,7 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <scope>annotationProcessor</scope>
+            <optional>true</optional>
         </dependency>
     </dependencies>
 

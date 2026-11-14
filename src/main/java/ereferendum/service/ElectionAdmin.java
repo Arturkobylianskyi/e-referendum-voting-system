@@ -2,23 +2,30 @@ package ereferendum.service;
 
 import ereferendum.crypto.BlindSignatureMath;
 import ereferendum.crypto.RsaKeys;
+import ereferendum.model.Referendum;
+import ereferendum.model.VoterAuthorization;
+import ereferendum.repository.ReferendumRepository;
+import ereferendum.repository.VoteAuthorizationRepository;
+import org.springframework.stereotype.Service;
 
 import java.math.BigInteger;
-import java.time.LocalDate;
-import java.util.HashSet;
-import java.util.Set;
+
 
 /**
  * Registration authority responsible for verifying voter eligibility
  * and issuing RSA blind signatures on blinded vote commitments
  */
+@Service
 public class ElectionAdmin {
 
     private final RsaKeys keys = RsaKeys.generate();
+    private final ReferendumRepository referendumRepository;
+    private final VoteAuthorizationRepository authRepository;
 
-    // database of voters who already got a signature
-    private final Set<String> usedVoters = new HashSet<>();
-
+    public ElectionAdmin(ReferendumRepository referendumRepository, VoteAuthorizationRepository authRepository){
+        this.referendumRepository = referendumRepository;
+        this.authRepository = authRepository;
+    }
 
     public BigInteger getModulusN(){
         return keys.modulusN();
@@ -29,16 +36,23 @@ public class ElectionAdmin {
     }
 
     // Verifies that the voterID is present, confirms they haven't voted, and blind-signs their commitment.
-    public BigInteger authorizeAndSign(String voterId, BigInteger blindedMsg) throws SecurityException{
+    public BigInteger authorizeAndSign(Long referendumId, String voterId, BigInteger blindedMsg) throws SecurityException{
         if(voterId == null || voterId.isBlank()){
             throw new SecurityException("Rejected: Voter ID cannot be blank");
         }
 
-        if(usedVoters.contains(voterId)){
+        Referendum referendum = referendumRepository.findById(referendumId)
+                .orElseThrow(() -> new IllegalArgumentException("Referendum not found: " + referendumId));
+
+        if(!referendum.isPollsOpen()){
+            throw new SecurityException("Rejected: polls are closed");
+        }
+
+        if(authRepository.existsByReferendumIdAndVoterId(referendumId, voterId)){
             throw new SecurityException("Rejected: Voter " + voterId + " has already received a blind signature!");
         }
 
-        usedVoters.add(voterId);
+        authRepository.save(new VoterAuthorization(referendum, voterId));
         return BlindSignatureMath.blindSign(blindedMsg, keys.privateExponentD(), keys.modulusN());
     }
 
