@@ -17,6 +17,10 @@ public class Block{
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "referendum_id")
+    public Referendum referendum;
+
     @Column(name="block_index", nullable = false)
     public int index;
 
