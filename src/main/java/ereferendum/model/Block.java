@@ -1,6 +1,7 @@
 package ereferendum.model;
 
 import ereferendum.crypto.VoteCommitment;
+import jakarta.persistence.*;
 
 import java.math.BigInteger;
 
@@ -8,20 +9,39 @@ import java.math.BigInteger;
  * Represents a single block in the voting blockchain storing one sealed ballot
  * and its revealed state after polls close
  */
+@Entity
+@Table(name="blocks")
 public class Block{
-    public final int index;
 
-    public final BigInteger commitmentX;
-    public final BigInteger cleanSignature;
-    public final BigInteger encryptedOpening;
-    public final String previousHash;
-    public final String currentHash;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name="block_index", nullable = false)
+    public int index;
+
+    @Column(precision = 700, nullable = false)
+    public BigInteger commitmentX;
+
+    @Column(precision = 700, nullable = false)
+    public BigInteger cleanSignature;
+
+    @Column(precision = 700, nullable = false)
+    public BigInteger encryptedOpening;
+
+    @Column(nullable = false)
+    public String previousHash;
+
+    @Column(nullable = false)
+    public String currentHash;
 
     public String revealedCandidate = null;
     public String revealedSalt = null;
 
     public boolean invalid = false;
     public String invalidReason = null;
+
+    protected Block(){};
 
     public Block(int index, BigInteger commitmentX, BigInteger cleanSignature, BigInteger encryptedOpening, String previousHash){
         this.index = index;
