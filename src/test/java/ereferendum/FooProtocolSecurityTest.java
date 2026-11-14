@@ -4,13 +4,11 @@ import ereferendum.crypto.BlindSignatureMath;
 import ereferendum.crypto.VoteCommitment;
 import ereferendum.model.Block;
 import ereferendum.service.ElectionAdmin;
-import ereferendum.service.PeselValidator;
 import ereferendum.service.VotingBlockchain;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
-import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -23,30 +21,30 @@ public class FooProtocolSecurityTest {
 
     @BeforeEach
     void setUp(){
-        admin = new ElectionAdmin(LocalDate.now());
+        admin = new ElectionAdmin();
         blockchain = new VotingBlockchain(admin.getModulusN(), admin.getPubExponentE(), ANSWERS);
     }
 
 
-    // helper valid pesel generator
-    private static String generateValidPesel(String first10Digits){
-        return PeselValidator.generateValidPesel(first10Digits);
+    // helper valid voterId generator
+    private static String generateValidVoterId(String id){
+        return "voter-"+id;
     }
 
-    private BigInteger signCommitment(String pesel, BigInteger commitmentX){
+    private BigInteger signCommitment(String voterId, BigInteger commitmentX){
         BigInteger maskB = BlindSignatureMath.generateBlindFactor(admin.getModulusN());
         BigInteger blindedMsg = BlindSignatureMath.blind(commitmentX, maskB,
                 admin.getPubExponentE(), admin.getModulusN());
-        BigInteger blindSig = admin.authorizeAndSign(pesel, blindedMsg);
+        BigInteger blindSig = admin.authorizeAndSign(voterId, blindedMsg);
 
         return BlindSignatureMath.unblind(blindSig, maskB, admin.getModulusN());
     }
 
     // helper: full voting flow for one voter, returns index of the block with the ballot
-    private int castVote(String pesel, String committedCandidate, String encryptedCandidate){
+    private int castVote(String voterId, String committedCandidate, String encryptedCandidate) {
         String salt = VoteCommitment.generateSalt();
         BigInteger commitmentX = VoteCommitment.createCommitment(committedCandidate, salt);
-        BigInteger cleanSig = signCommitment(pesel, commitmentX);
+        BigInteger cleanSig = signCommitment(voterId, commitmentX);
         BigInteger encryptedOpening = VoteCommitment.encryptOpening(
                 encryptedCandidate, salt, blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
         );
@@ -55,34 +53,22 @@ public class FooProtocolSecurityTest {
     }
 
     @Test
-    void shouldValidatePeselAndBlockUnderageVoter(){
-        LocalDate electionDay = LocalDate.of(2026, 10, 24);
-        ElectionAdmin admin = new ElectionAdmin(electionDay);
-
-        String underagePesel = generateValidPesel("1225101234");// Born 10.05.2012
-        String fakeChecksumPesel = "99051512340";
-
-        // Check that validator rejects both
-        assertFalse(PeselValidator.isAdultVoter(underagePesel, electionDay));
-        assertFalse(PeselValidator.isValidChecksum(fakeChecksumPesel));
-
-        // Check that Admin throws SecurityException when underage person tries to vote
-        assertThrows(SecurityException.class, () -> {
-            admin.authorizeAndSign(underagePesel, BigInteger.valueOf(12345));
-        });
+    void shouldRejectBlankVoterId(){
+        assertThrows(SecurityException.class, () -> admin.authorizeAndSign("", BigInteger.valueOf(12345)));
+        assertThrows(SecurityException.class, () -> admin.authorizeAndSign(null, BigInteger.valueOf(12345)));
     }
 
     @Test
-    void shouldBlockDoubleVotingWithSamePesel(){
-        ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
-        String validAdultPesel = generateValidPesel("9905151234"); // Born 15.05.1999
+    void shouldBlockDoubleVotingWithSamevoterId(){
+        ElectionAdmin admin = new ElectionAdmin();
+        String validAdultvoterId = generateValidVoterId("9905151234"); // Born 15.05.1999
 
         // 1st time: Voter gets blind signature seccessfully
-        BigInteger firstSignature = admin.authorizeAndSign(validAdultPesel, BigInteger.valueOf(77777));
+        BigInteger firstSignature = admin.authorizeAndSign(validAdultvoterId, BigInteger.valueOf(77777));
         assertNotNull(firstSignature);
 
-        // 2nd time: Same Pesel tries to get another signature
-        assertThrows(SecurityException.class, () -> admin.authorizeAndSign(validAdultPesel, BigInteger.valueOf(888888)));
+        // 2nd time: Same voterId tries to get another signature
+        assertThrows(SecurityException.class, () -> admin.authorizeAndSign(validAdultvoterId, BigInteger.valueOf(888888)));
     }
 
 
@@ -108,7 +94,7 @@ public class FooProtocolSecurityTest {
     @Test
     void shouldMarkMismatchedBallotAsInvalid(){
         
-        int idx = castVote( generateValidPesel("9511205432"),
+        int idx = castVote( generateValidVoterId("9511205432"),
                 "TAK", "NIE");
 
         assertDoesNotThrow(blockchain::closePollsAndRevealAll);
@@ -122,10 +108,10 @@ public class FooProtocolSecurityTest {
     void oneInvalidBallotShouldNotBlockCountingOfOthers(){
        
 
-        int badIdx = castVote( generateValidPesel("9511205432"),
+        int badIdx = castVote( generateValidVoterId("9511205432"),
                 "TAK", "NIE");
 
-        int goodidx = castVote( generateValidPesel("9905151234"),
+        int goodidx = castVote( generateValidVoterId("9905151234"),
                 "TAK", "TAK");
 
         blockchain.closePollsAndRevealAll();
@@ -139,8 +125,8 @@ public class FooProtocolSecurityTest {
     @Test
     void shouldSuccessfullyCompleteSingleClickVotingAndAutoReveal(){
 
-        String pesel = generateValidPesel("0122149876");
-        int blockIndex = castVote(pesel, "TAK", "TAK");
+        String voterId = generateValidVoterId("0122149876");
+        int blockIndex = castVote(voterId, "TAK", "TAK");
 
         blockchain.closePollsAndRevealAll();
 
@@ -182,7 +168,7 @@ public class FooProtocolSecurityTest {
     void shouldKeepBallotsSealedWhilePollsOpen(){
        
 
-        int idx = castVote( generateValidPesel("9905151234"),
+        int idx = castVote( generateValidVoterId("9905151234"),
                 "TAK", "TAK");
 
         // before closing nobody knows the vote
@@ -194,12 +180,12 @@ public class FooProtocolSecurityTest {
     void shouldRejectBallotAfterPollsClosed(){
        
 
-        castVote( generateValidPesel("9905151234"),
+        castVote( generateValidVoterId("9905151234"),
                 "TAK", "TAK");
         blockchain.closePollsAndRevealAll();
 
         assertThrows(SecurityException.class, () -> {
-            castVote( generateValidPesel("9511205432"),
+            castVote( generateValidVoterId("9511205432"),
                     "NIE", "NIE");
         });
 
@@ -220,7 +206,7 @@ public class FooProtocolSecurityTest {
     void shouldMarkAnswerOutsideBallotAsInvalid() {
        
 
-        int idx = castVote( generateValidPesel("9905151234"), "MOZE", "MOZE");
+        int idx = castVote( generateValidVoterId("9905151234"), "MOZE", "MOZE");
 
         blockchain.closePollsAndRevealAll();
 
@@ -230,7 +216,7 @@ public class FooProtocolSecurityTest {
 
     @Test
     void shouldRejectInvalidAnswerList(){
-        ElectionAdmin admin = new ElectionAdmin(LocalDate.now());
+        ElectionAdmin admin = new ElectionAdmin();
         BigInteger n = admin.getModulusN();
         BigInteger e = admin.getPubExponentE();
 
@@ -245,10 +231,10 @@ public class FooProtocolSecurityTest {
     void shouldCorrectlyCountValidAndInvalidVotes(){
         assertEquals(ANSWERS, blockchain.getAllowedAnswers());
 
-        castVote( generateValidPesel("9905151234"), "TAK", "TAK");
-        castVote( generateValidPesel("9511205432"), "NIE", "NIE");
-        castVote( generateValidPesel("0122149876"), "TAK", "TAK");
-        castVote( generateValidPesel("9001011234"), "TAK", "NIE");
+        castVote( generateValidVoterId("9905151234"), "TAK", "TAK");
+        castVote( generateValidVoterId("9511205432"), "NIE", "NIE");
+        castVote( generateValidVoterId("0122149876"), "TAK", "TAK");
+        castVote( generateValidVoterId("9001011234"), "TAK", "NIE");
 
         blockchain.closePollsAndRevealAll();
 
@@ -261,7 +247,7 @@ public class FooProtocolSecurityTest {
     void shouldRejectDuplicateBallotCommitmentOnBlockchain() {
         String salt = VoteCommitment.generateSalt();
         BigInteger commitmentX = VoteCommitment.createCommitment("TAK", salt);
-        BigInteger cleanSig = signCommitment(generateValidPesel("9905151234"), commitmentX);
+        BigInteger cleanSig = signCommitment(generateValidVoterId("9905151234"), commitmentX);
         BigInteger encryptedOpening = VoteCommitment.encryptOpening(
                 "TAK", salt, blockchain.getTallyPubExponentE(), blockchain.getTallyModulusN()
         );
@@ -274,11 +260,11 @@ public class FooProtocolSecurityTest {
 
     @Test
     void shouldHandleCorruptedEncryptedPayloadAndFormatBlockStatus() {
-        int validIdx = castVote(generateValidPesel("9905151234"), "TAK", "TAK");
+        int validIdx = castVote(generateValidVoterId("9905151234"), "TAK", "TAK");
         assertEquals("[SEALED]", blockchain.getChain().get(validIdx).formatStatus());
 
         BigInteger commitmentX = VoteCommitment.createCommitment("NIE", VoteCommitment.generateSalt());
-        BigInteger cleanSig = signCommitment(generateValidPesel("9511205432"), commitmentX);
+        BigInteger cleanSig = signCommitment(generateValidVoterId("9511205432"), commitmentX);
         int corruptedIdx = blockchain.submitBallot(commitmentX, cleanSig, BigInteger.valueOf(12345));
 
         blockchain.closePollsAndRevealAll();
@@ -286,21 +272,7 @@ public class FooProtocolSecurityTest {
         assertEquals("TAK", blockchain.getChain().get(validIdx).formatStatus());
         assertTrue(blockchain.getChain().get(corruptedIdx).formatStatus().startsWith("[INVALID:"));
     }
-
-    @Test
-    void shouldRejectPeselWithInvalidMonthOrCalendarDate(){
-        LocalDate electionDay = LocalDate.of(2026, 10, 24);
-
-        String invalidFeb31 = generateValidPesel("9902311234");
-        String invalidMonth = generateValidPesel("9965151234");
-        String century1800 = generateValidPesel("9085151234");
-        String century2100 = generateValidPesel("0545151234");
-
-        assertFalse(PeselValidator.isAdultVoter(invalidFeb31, electionDay));
-        assertFalse(PeselValidator.isAdultVoter(invalidMonth, electionDay));
-        assertTrue(PeselValidator.isAdultVoter(century1800, electionDay));
-        assertFalse(PeselValidator.isAdultVoter(century2100, electionDay));
-    }
+    
 
     @Test
     void shouldRejectBlankVoteOrSaltInCommitment(){
