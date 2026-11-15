@@ -1,0 +1,59 @@
+{
+  "realm": "ereferendum",
+  "enabled": true,
+  "roles": {
+    "realm": [
+      { "name": "ADMIN" },
+      { "name": "VOTER" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "ereferendum-client",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "redirectUris": ["http://localhost:8080/*"],
+      "webOrigins": ["*"]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Election",
+      "lastName": "Admin",
+      "email": "admin@ereferendum.local",
+      "credentials": [
+        { "type": "password", "value": "admin123", "temporary": false }
+      ],
+      "realmRoles": ["ADMIN"]
+    },
+    {
+      "username": "voter1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Jan",
+      "lastName": "Kowalski",
+      "email": "voter1@ereferendum.local",
+      "credentials": [
+        { "type": "password", "value": "voter123", "temporary": false }
+      ],
+      "realmRoles": ["VOTER"]
+    },
+    {
+      "username": "voter2",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Anna",
+      "lastName": "Nowak",
+      "email": "voter2@ereferendum.local",
+      "credentials": [
+        { "type": "password", "value": "voter123", "temporary": false }
+      ],
+      "realmRoles": ["VOTER"]
+    }
+  ]
+}
