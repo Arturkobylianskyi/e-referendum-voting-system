@@ -21,7 +21,7 @@ services:
     ports:
       - "8081:8080"
     volumes:
-      - ./keycloak-realm.json:/opt/keycloak/data/import/keycloak-realm.json:ro
+      - ./ereferendum-realm.json:/opt/keycloak/data/import/ereferendum-realm.json:ro
 
 volumes:
   postgres_data:
