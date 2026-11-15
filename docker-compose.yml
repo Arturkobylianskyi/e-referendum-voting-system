@@ -11,5 +11,15 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: ereferendum-keycloak
+    command: start-dev
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+    ports:
+      - "8081:8080"
+
 volumes:
   postgres_data:
