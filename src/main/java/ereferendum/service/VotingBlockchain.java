@@ -8,6 +8,7 @@ import ereferendum.model.Referendum;
 import ereferendum.repository.BlockRepository;
 import ereferendum.repository.ReferendumRepository;
 import org.springframework.stereotype.Service;
+import java.util.NoSuchElementException;
 
 import java.math.BigInteger;
 import java.util.HashSet;
@@ -73,7 +74,7 @@ public class VotingBlockchain {
 
     public Referendum getReferendum(Long referendumId) {
         return referendumRepository.findById(referendumId)
-                .orElseThrow(() -> new IllegalArgumentException("Referendum not found: " + referendumId));
+                .orElseThrow(() -> new NoSuchElementException("Referendum not found: " + referendumId));
     }
 
     public List<Referendum> getAllReferendums() {

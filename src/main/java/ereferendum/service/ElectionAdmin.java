@@ -7,6 +7,7 @@ import ereferendum.model.VoterAuthorization;
 import ereferendum.repository.ReferendumRepository;
 import ereferendum.repository.VoteAuthorizationRepository;
 import org.springframework.stereotype.Service;
+import java.util.NoSuchElementException;
 
 import java.math.BigInteger;
 
@@ -42,7 +43,7 @@ public class ElectionAdmin {
         }
 
         Referendum referendum = referendumRepository.findById(referendumId)
-                .orElseThrow(() -> new IllegalArgumentException("Referendum not found: " + referendumId));
+                .orElseThrow(() -> new NoSuchElementException("Referendum not found: " + referendumId));
 
         if(!referendum.isPollsOpen()){
             throw new SecurityException("Rejected: polls are closed");
