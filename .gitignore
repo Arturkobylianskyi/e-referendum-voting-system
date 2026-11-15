@@ -37,3 +37,7 @@ build/
 
 ### env
 .env
+
+### React / Node ###
+node_modules/
+frontend/dist/
